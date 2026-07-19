@@ -3,7 +3,53 @@ import '../widgets/dashboard_card.dart';
 import '../widgets/statistic_card.dart';
 
 class DashboardScreen extends StatelessWidget {
-  const DashboardScreen({super.key});
+  DashboardScreen({super.key});
+
+  final List<_DashboardItem> dashboardItems = [
+
+  _DashboardItem(
+    Icons.people,
+    'Customers',
+    () {},
+  ),
+
+  _DashboardItem(
+    Icons.badge,
+    'Employees',
+    () {},
+  ),
+
+  _DashboardItem(
+    Icons.calendar_month,
+    'Appointments',
+    () {},
+  ),
+
+  _DashboardItem(
+    Icons.content_cut,
+    'Services',
+    () {},
+  ),
+
+  _DashboardItem(
+    Icons.payments,
+    'Billing',
+    () {},
+  ),
+
+  _DashboardItem(
+    Icons.bar_chart,
+    'Reports',
+    () {},
+  ),
+
+  _DashboardItem(
+    Icons.settings,
+    'Settings',
+    () {},
+  ),
+
+];
 
   @override
   Widget build(BuildContext context) {
@@ -54,19 +100,19 @@ class DashboardScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: StatisticCard(
-                    'Appointments',
-                    '18',
-                    Icons.calendar_month,
-                    Colors.blue,
+                   title: 'Appointments',
+                   value:  '18',
+                   icon: Icons.calendar_month,
+                   color: Colors.blue,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: StatisticCard(
-                    'Revenue',
-                    'Rs. 42,500',
-                    Icons.payments,
-                    Colors.green,
+                    title: 'Revenue',
+                    value: 'Rs. 42,500',
+                    icon: Icons.payments,
+                    color: Colors.green,
                   ),
                 ),
               ],
@@ -78,19 +124,19 @@ class DashboardScreen extends StatelessWidget {
               children: [
                 Expanded(
                   child: StatisticCard(
-                    'Customers',
-                    '324',
-                    Icons.people,
-                    Colors.orange,
+                    title: 'Customers',
+                    value: '324',
+                    icon: Icons.people,
+                    color: Colors.orange,
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: StatisticCard(
-                    'Employees',
-                    '12',
-                    Icons.badge,
-                    Colors.purple,
+                    title: 'Employees',
+                    value: '12',
+                    icon: Icons.badge,
+                    color: Colors.purple,
                   ),
                 ),
               ],
@@ -108,24 +154,44 @@ class DashboardScreen extends StatelessWidget {
 
             const SizedBox(height: 15),
 
-            GridView.count(
-              crossAxisCount: 2,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              crossAxisSpacing: 12,
-              mainAxisSpacing: 12,
-              childAspectRatio: 1.15,
-              children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
 
-                DashboardCard(Icons.people, "Customers", () {}),
-                DashboardCard(Icons.badge, "Employees", () {}),
-                DashboardCard(Icons.calendar_month, "Appointments", () {}),
-                DashboardCard(Icons.content_cut, "Services", () {}),
-                DashboardCard(Icons.payments, "Billing", () {}),
-                DashboardCard(Icons.bar_chart, "Reports", () {}),
-                DashboardCard(Icons.settings, "Settings", () {}),
+                int crossAxisCount = 2;
 
-              ],
+                if (constraints.maxWidth >= 1200) {
+                  crossAxisCount = 4;
+                } else if (constraints.maxWidth >= 800) {
+                  crossAxisCount = 3;
+                } else {
+                  crossAxisCount = 2;
+                }
+
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    crossAxisSpacing: 12,
+                    mainAxisSpacing: 12,
+                    childAspectRatio: 1.15,
+                  ),
+
+                  itemCount: dashboardItems.length,
+
+                  itemBuilder: (context, index) {
+
+                    final item = dashboardItems[index];
+
+                    return DashboardCard(
+                      icon: item.icon,
+                      title: item.title,
+                      onTap: item.onTap,
+                    );
+                  },
+                );
+              },
             ),
           ],
         ),
@@ -134,4 +200,18 @@ class DashboardScreen extends StatelessWidget {
   }
 
   
+}
+
+class _DashboardItem {
+
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  _DashboardItem(
+    this.icon,
+    this.title,
+    this.onTap,
+  );
+
 }
