@@ -1,100 +1,115 @@
 import 'package:flutter/material.dart';
+
+import '../../../shared/theme/theme.dart';
+import '../widgets/login_form.dart';
+import '../widgets/login_header.dart';
+import '../widgets/login_logo.dart';
 import '../../dashboard/screens/dashboard_screen.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
+
+  final _usernameController = TextEditingController();
+  final _passwordController = TextEditingController();
+
+  bool _obscurePassword = true;
+  bool _rememberMe = false;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _usernameController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _togglePassword() {
+    setState(() {
+      _obscurePassword = !_obscurePassword;
+    });
+  }
+
+  void _toggleRememberMe(bool? value) {
+    setState(() {
+      _rememberMe = value ?? false;
+    });
+  }
+
+  Future<void> _login() async {
+  if (!_formKey.currentState!.validate()) {
+    return;
+  }
+
+  setState(() {
+    _isLoading = true;
+  });
+
+  // Temporary login delay
+  await Future.delayed(const Duration(seconds: 1));
+
+  if (!mounted) return;
+
+  setState(() {
+    _isLoading = false;
+  });
+
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(
+      builder: (_) => DashboardScreen(),
+    ),
+  );
+}
+
+
+
+  void _forgotPassword() {
+    // TODO:
+    // Navigate to Forgot Password Screen
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade100,
-      body: Center(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Container(
-            width: 400,
-            padding: const EdgeInsets.all(30),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(15),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black12,
-                  blurRadius: 10,
-                  offset: Offset(0, 5),
-                ),
-              ],
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.content_cut,
-                  size: 80,
-                  color: Colors.deepPurple,
-                ),
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(AppDimensions.spaceXL),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: 420,
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const LoginLogo(),
 
-                const SizedBox(height: 20),
+                  const SizedBox(height: AppDimensions.spaceXL),
 
-                const Text(
-                  "Salon Booking System",
-                  style: TextStyle(
-                    fontSize: 26,
-                    fontWeight: FontWeight.bold,
+                  const LoginHeader(),
+
+                  const SizedBox(height: AppDimensions.spaceXL),
+
+                  LoginForm(
+                    formKey: _formKey,
+                    usernameController: _usernameController,
+                    passwordController: _passwordController,
+                    obscurePassword: _obscurePassword,
+                    rememberMe: _rememberMe,
+                    isLoading: _isLoading,
+                    onTogglePassword: _togglePassword,
+                    onToggleRememberMe: _toggleRememberMe,
+                    onLoginPressed: _login,
+                    onForgotPassword: _forgotPassword,
                   ),
-                ),
-
-                const SizedBox(height: 8),
-
-                Text(
-                  "Please sign in to continue",
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                TextField(
-                  decoration: InputDecoration(
-                    labelText: "Username",
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-
-                const SizedBox(height: 20),
-
-                TextField(
-                  obscureText: true,
-                  decoration: InputDecoration(
-                    labelText: "Password",
-                    prefixIcon: Icon(Icons.lock),
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-
-                const SizedBox(height: 30),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 50,
-                  child: ElevatedButton(
-                    onPressed: () {
-                            Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => DashboardScreen(),
-                                ),
-                              );
-                          },
-                         child: const Text(
-                      "LOGIN",
-                      style: TextStyle(fontSize: 18),
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

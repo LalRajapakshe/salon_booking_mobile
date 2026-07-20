@@ -25,14 +25,14 @@ class AppEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(AppDimensions.paddingL),
+        padding: const EdgeInsets.all(AppDimensions.spaceL),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               icon,
               size: 80,
-              color: AppColors.textSecondary,
+              color: AppColors.subtitle,
             ),
 
             const SizedBox(

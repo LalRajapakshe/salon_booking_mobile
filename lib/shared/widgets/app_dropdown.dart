@@ -34,7 +34,7 @@ class AppDropdown<T> extends StatelessWidget {
         hintText: hintText,
       ),
       borderRadius: BorderRadius.circular(
-        AppDimensions.radiusM,
+        AppDimensions.textFieldRadius,
       ),
       isExpanded: true,
     );

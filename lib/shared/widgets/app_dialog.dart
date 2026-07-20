@@ -27,7 +27,7 @@ class AppDialog {
         return AlertDialog(
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(
-              AppDimensions.radiusL,
+              AppDimensions.dialogRadius,
             ),
           ),
           titlePadding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
