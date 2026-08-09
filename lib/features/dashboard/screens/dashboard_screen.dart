@@ -10,6 +10,10 @@ import '../widgets/quick_action_card.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/section_title.dart';
 
+import '../../revenue/widgets/revenue_trend_chart.dart';
+import '../../revenue/widgets/revenue_service_pie.dart';
+import '../../revenue/widgets/payment_breakdown_card.dart';
+
 class DashboardScreen extends StatelessWidget {
   DashboardScreen({super.key});
 
@@ -90,7 +94,12 @@ class DashboardScreen extends StatelessWidget {
 
                   mainAxisSpacing: 16,
 
-                  childAspectRatio: 1.35,
+                  //childAspectRatio: 1.35,
+                 childAspectRatio: constraints.maxWidth < 600
+                          ? 1.20
+                          : constraints.maxWidth < 900
+                              ? 1.28
+                              : 1.35,
 
                   children: [
 
@@ -168,7 +177,45 @@ class DashboardScreen extends StatelessWidget {
                 );
               },
             ),
+///////////////////////////////////////////////////
+const SizedBox(height: 30),
 
+              const SectionTitle(
+                title: "Revenue Analytics",
+                subtitle: "Revenue insights and trends",
+                icon: Icons.bar_chart,
+              ),
+
+              const SizedBox(height: 20),
+
+              const RevenueTrendChart(),
+
+              const SizedBox(height: 24),
+
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  if (constraints.maxWidth > 900) {
+                    return const Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: RevenueServicePie()),
+                        SizedBox(width: 20),
+                        Expanded(child: PaymentBreakdownCard()),
+                      ],
+                    );
+                  }
+
+                  return const Column(
+                    children: [
+                      RevenueServicePie(),
+                      SizedBox(height: 20),
+                      PaymentBreakdownCard(),
+                    ],
+                  );
+                },
+              ),
+
+//////////////////////////////////////////////////
             const SizedBox(height: 30),
 
             const SectionTitle(

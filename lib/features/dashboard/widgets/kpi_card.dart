@@ -18,58 +18,72 @@ class KpiCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final width = MediaQuery.of(context).size.width;
+    final mobile = width < 600;
+
+    final padding = mobile ? 14.0 : 18.0;
+    final valueSize = mobile ? 20.0 : 26.0;
+    final titleSize = mobile ? 12.5 : 14.0;
+    final iconRadius = mobile ? 20.0 : 22.0;
+
+    final negative = change.trim().startsWith('-');
+
     return Card(
-      elevation: 4,
-      shadowColor: color.withOpacity(.25),
+      elevation: 3,
+      shadowColor: color.withOpacity(.18),
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.all(padding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             CircleAvatar(
-              radius: 22,
+              radius: iconRadius,
               backgroundColor: color.withOpacity(.12),
-              child: Icon(
-                icon,
-                color: color,
-              ),
+              child: Icon(icon, color: color),
             ),
-            const Spacer(),
+            const SizedBox(height: 16),
             Text(
               value,
-              style: const TextStyle(
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: valueSize,
                 fontWeight: FontWeight.bold,
-                fontSize: 26,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               title,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                color: Colors.grey.shade700,
+                fontSize: titleSize,
+                color: Colors.grey,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            const SizedBox(height: 10),
-            Row(
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Icon(
-                  Icons.trending_up,
-                  color: Colors.green.shade700,
-                  size: 18,
+                  negative ? Icons.trending_down : Icons.trending_up,
+                  size: 16,
+                  color: negative ? Colors.red : Colors.green,
                 ),
-                const SizedBox(width: 4),
                 Text(
                   change,
                   style: TextStyle(
-                    color: Colors.green.shade700,
+                    color: negative ? Colors.red : Colors.green,
                     fontWeight: FontWeight.w600,
                   ),
-                )
+                ),
               ],
-            )
+            ),
           ],
         ),
       ),

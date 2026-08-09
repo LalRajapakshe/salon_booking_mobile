@@ -1,0 +1,1 @@
+// Customer health badge widget
