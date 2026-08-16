@@ -1,6 +1,6 @@
 class Customer {
   final int id;
-  final String customerCode;
+ final String customerCode;
   final String firstName;
   final String lastName;
   final String mobileNumber;
@@ -14,7 +14,7 @@ class Customer {
 
   const Customer({
     required this.id,
-    required this.customerCode,
+   required this.customerCode,
     required this.firstName,
     required this.lastName,
     required this.mobileNumber,
@@ -24,7 +24,8 @@ class Customer {
     this.address,
     this.notes,
     this.isActive = true,
-    required this.createdDate,
+    required this.createdDate
+    //, required String name, required String phone, required int visits, required String lastVisit, required String membership, required String status,
   });
 
   String get fullName => '$firstName $lastName';
@@ -62,7 +63,7 @@ class Customer {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'customerCode': customerCode,
+       'customerCode': customerCode,
       'firstName': firstName,
       'lastName': lastName,
       'mobileNumber': mobileNumber,

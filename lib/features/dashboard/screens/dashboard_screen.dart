@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:salon_booking_mobile/features/customers/screens/customer_details_screen.dart';
 
 import '../widgets/ai_summary_card.dart';
 import '../widgets/dashboard_card.dart';
@@ -10,15 +11,33 @@ import '../widgets/quick_action_card.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/section_title.dart';
 
-import '../../revenue/widgets/revenue_trend_chart.dart';
-import '../../revenue/widgets/revenue_service_pie.dart';
-import '../../revenue/widgets/payment_breakdown_card.dart';
+//import '../../revenue/widgets/revenue_trend_chart.dart';
+//import '../../revenue/widgets/revenue_service_pie.dart';
+//import '../../revenue/widgets/payment_breakdown_card.dart';
+
+import '../../revenue/screens/revenue_dashboard_screen.dart';
+import '../../customers/screens/customers_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
   DashboardScreen({super.key});
 
-  final List<_DashboardItem> dashboardItems = [
-    _DashboardItem(Icons.people, "Customers", () {}),
+    @override
+  Widget build(BuildContext context) {
+
+       final List<_DashboardItem> dashboardItems = [
+    _DashboardItem(
+      Icons.people,
+      "Customers",
+      () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const CustomersScreen(),
+          ),
+        );
+      },
+    ),
+
     _DashboardItem(Icons.badge, "Employees", () {}),
     _DashboardItem(Icons.calendar_month, "Appointments", () {}),
     _DashboardItem(Icons.content_cut, "Services", () {}),
@@ -27,8 +46,6 @@ class DashboardScreen extends StatelessWidget {
     _DashboardItem(Icons.settings, "Settings", () {}),
   ];
 
-  @override
-  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xffF4F6FA),
 
@@ -150,13 +167,13 @@ class DashboardScreen extends StatelessWidget {
                       icon: Icons.account_balance_wallet,
                       color: Colors.red,
                     ),
-                    KpiCard(
-  title: "Outstanding",
-  value: "Rs.21K",
-  change: "-4%",
-  icon: Icons.account_balance_wallet,
-  color: Colors.red,
-),
+ //                   KpiCard(
+ // title: "Outstanding",
+ // value: "Rs.21K",
+ // change: "-4%",
+ // icon: Icons.account_balance_wallet,
+ // color: Colors.red,
+//),
                     KpiCard(
                       title: "VIP Members",
                       value: "18",
@@ -178,42 +195,68 @@ class DashboardScreen extends StatelessWidget {
               },
             ),
 ///////////////////////////////////////////////////
-const SizedBox(height: 30),
+          const SizedBox(height: 30),
 
-              const SectionTitle(
-                title: "Revenue Analytics",
-                subtitle: "Revenue insights and trends",
-                icon: Icons.bar_chart,
-              ),
+          const SectionTitle(
+            title: "Revenue Analytics",
+            subtitle: "Revenue insights and trends",
+            icon: Icons.bar_chart,
+          ),
 
-              const SizedBox(height: 20),
+          const SizedBox(height: 16),
 
-              const RevenueTrendChart(),
-
-              const SizedBox(height: 24),
-
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  if (constraints.maxWidth > 900) {
-                    return const Row(
+          Card(
+            elevation: 2,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(18),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(child: RevenueServicePie()),
-                        SizedBox(width: 20),
-                        Expanded(child: PaymentBreakdownCard()),
-                      ],
-                    );
-                  }
+                        Text(
+                          "Revenue Performance",
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
 
-                  return const Column(
-                    children: [
-                      RevenueServicePie(),
-                      SizedBox(height: 20),
-                      PaymentBreakdownCard(),
-                    ],
-                  );
-                },
+                        SizedBox(height: 6),
+
+                        Text(
+                          "View detailed revenue trends, services and payment breakdown.",
+                          style: TextStyle(
+                            color: Colors.grey,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  const SizedBox(width: 16),
+
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              const RevenueDashboardScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text("View Analytics →"),
+                  ),
+                ],
               ),
+            ),
+          ),
+
 
 //////////////////////////////////////////////////
             const SizedBox(height: 30),

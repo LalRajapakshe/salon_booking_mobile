@@ -15,8 +15,8 @@ class RecentTransactionsTable extends StatelessWidget {
           children: transactions.isEmpty
               ? [const Text('No recent transactions')]
               : transactions.map((t) => ListTile(
-                    title: Text(t.serviceName ?? 'Service'),
-                    subtitle: Text(t.customerName ?? ''),
+                    title: Text(t.service ?? 'Service'),
+                    subtitle: Text(t.customerName),
                     trailing: Text('\$${t.amount.toStringAsFixed(2)}'),
                   )).toList(),
         ),

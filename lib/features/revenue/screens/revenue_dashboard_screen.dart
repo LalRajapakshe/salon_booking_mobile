@@ -11,6 +11,8 @@ import '../widgets/revenue_trend_chart.dart';
 import '../widgets/top_employee_card.dart';
 import '../widgets/top_services_card.dart';
 
+
+
 class RevenueDashboardScreen extends StatelessWidget {
   const RevenueDashboardScreen({super.key});
 
@@ -136,7 +138,7 @@ LayoutBuilder(
             SizedBox(height: 24),
 
             /// AI Insights
-            AIRevenueInsights(),
+            AiRevenueInsights(),
 
             SizedBox(height: 24),
 
