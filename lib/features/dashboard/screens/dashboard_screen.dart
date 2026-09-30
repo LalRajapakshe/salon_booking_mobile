@@ -15,6 +15,7 @@ import '../widgets/section_title.dart';
 //import '../../revenue/widgets/revenue_service_pie.dart';
 //import '../../revenue/widgets/payment_breakdown_card.dart';
 
+import '../../appointments/screens/appointments_screen.dart';
 import '../../revenue/screens/revenue_dashboard_screen.dart';
 import '../../customers/screens/customers_screen.dart';
 
@@ -39,7 +40,18 @@ class DashboardScreen extends StatelessWidget {
     ),
 
     _DashboardItem(Icons.badge, "Employees", () {}),
-    _DashboardItem(Icons.calendar_month, "Appointments", () {}),
+    _DashboardItem(
+      Icons.calendar_month,
+      "Appointments",
+      () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AppointmentsScreen(),
+          ),
+        );
+      },
+    ),
     _DashboardItem(Icons.content_cut, "Services", () {}),
     _DashboardItem(Icons.payments, "Billing", () {}),
     _DashboardItem(Icons.bar_chart, "Reports", () {}),
