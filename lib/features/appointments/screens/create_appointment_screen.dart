@@ -67,12 +67,6 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         .toList();
   }
 
-  List<ServiceLookup> get _selectedServices {
-    return [
-      for (final line in _services) AppointmentCatalog.service(line.serviceId),
-    ];
-  }
-
   void _cancel() {
     Navigator.of(context).pop();
   }
@@ -208,7 +202,9 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                     children: [
                       _buildHeader(),
                       const SizedBox(height: 24),
-                      _buildFormCard(),
+                      _buildAppointmentCard(),
+                      const SizedBox(height: 24),
+                      _buildServicesCard(),
                     ],
                   ),
                 ),
@@ -230,138 +226,171 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         ),
         SizedBox(height: 6),
         Text(
-          'Choose a branch, customer, employee, and one or more services',
+          'Record the booking, then add the services it includes',
           style: TextStyle(color: Colors.grey, fontSize: 14),
         ),
       ],
     );
   }
 
-  Widget _buildFormCard() {
+  Widget _sectionCard({required Widget child}) {
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final twoColumns = constraints.maxWidth >= _twoColumnBreakpoint;
-            final branchReady = _branchId != null;
+        child: child,
+      ),
+    );
+  }
 
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _pair(
-                  twoColumns: twoColumns,
-                  first: AppDropdown<int>(
-                    labelText: 'Branch',
-                    hintText: 'Select branch',
-                    value: _branchId,
-                    items: [
-                      for (final branch in AppointmentCatalog.branches)
-                        DropdownMenuItem<int>(
-                          value: branch.branchId,
-                          child: Text(branch.label, overflow: TextOverflow.ellipsis),
-                        ),
-                    ],
-                    onChanged: _onBranchChanged,
-                    validator: (value) => _requiredSelection(value, 'Branch'),
-                  ),
-                  second: AppDropdown<int>(
-                    labelText: 'Customer',
-                    hintText: branchReady ? 'Select customer' : 'Select a branch first',
-                    value: _customerId,
-                    enabled: branchReady,
-                    items: [
-                      for (final customer in _customers)
-                        DropdownMenuItem<int>(
-                          value: customer.customerId,
-                          child: Text(customer.label, overflow: TextOverflow.ellipsis),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() => _customerId = value),
-                    validator: (value) => _requiredSelection(value, 'Customer'),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _pair(
-                  twoColumns: twoColumns,
-                  first: AppDropdown<int>(
-                    labelText: 'Employee',
-                    hintText: branchReady ? 'Select employee' : 'Select a branch first',
-                    value: _employeeId,
-                    enabled: branchReady,
-                    items: [
-                      for (final employee in _employees)
-                        DropdownMenuItem<int>(
-                          value: employee.employeeId,
-                          child: Text(employee.label, overflow: TextOverflow.ellipsis),
-                        ),
-                    ],
-                    onChanged: (value) => setState(() => _employeeId = value),
-                    validator: (value) => _requiredSelection(value, 'Employee'),
-                  ),
-                  second: AppDropdown<AppointmentStatus>(
-                    labelText: 'Status',
-                    value: _status,
-                    items: [
-                      for (final status in AppointmentStatus.values)
-                        DropdownMenuItem<AppointmentStatus>(
-                          value: status,
-                          child: Text(status.label),
-                        ),
-                    ],
-                    onChanged: (value) {
-                      if (value != null) setState(() => _status = value);
-                    },
-                  ),
-                ),
-                const SizedBox(height: 16),
-                if (twoColumns)
-                  _pair(
-                    twoColumns: true,
-                    first: AppointmentDateField(
-                      value: _appointmentDate,
-                      onChanged: (date) => setState(() => _appointmentDate = date),
-                      validator: _dateValidator,
-                    ),
-                    second: const SizedBox.shrink(),
-                  )
-                else
-                  AppointmentDateField(
-                    value: _appointmentDate,
-                    onChanged: (date) => setState(() => _appointmentDate = date),
-                    validator: _dateValidator,
-                  ),
-                const SizedBox(height: 16),
-                _pair(
-                  twoColumns: twoColumns,
-                  first: _timeDropdown(
-                    label: 'Start Time',
-                    hint: 'Select start time',
-                    value: _startTime,
-                    onChanged: (value) {
-                      setState(() => _startTime = value);
-                      _revalidateIfNeeded();
-                    },
-                    validator: (value) => _requiredSelection(value, 'Start time'),
-                  ),
-                  second: _timeDropdown(
-                    label: 'End Time',
-                    hint: 'Select end time',
-                    value: _endTime,
-                    onChanged: (value) => setState(() => _endTime = value),
-                    validator: _endTimeValidator,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                _buildServices(twoColumns, branchReady),
-                const SizedBox(height: 8),
-                _buildActions(constraints.maxWidth),
-              ],
-            );
-          },
+  Widget _sectionHeading(String title, String subtitle) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
         ),
+        const SizedBox(height: 4),
+        Text(
+          subtitle,
+          style: const TextStyle(color: Colors.grey, fontSize: 13),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAppointmentCard() {
+    return _sectionCard(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final twoColumns = constraints.maxWidth >= _twoColumnBreakpoint;
+          final branchReady = _branchId != null;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _sectionHeading(
+                'Appointment',
+                'Branch, customer, employee, date, times, and status',
+              ),
+              const SizedBox(height: 16),
+              _pair(
+                twoColumns: twoColumns,
+                first: AppDropdown<int>(
+                  labelText: 'Branch',
+                  hintText: 'Select branch',
+                  value: _branchId,
+                  items: [
+                    for (final branch in AppointmentCatalog.branches)
+                      DropdownMenuItem<int>(
+                        value: branch.branchId,
+                        child: Text(branch.label, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: _onBranchChanged,
+                  validator: (value) => _requiredSelection(value, 'Branch'),
+                ),
+                second: AppDropdown<int>(
+                  labelText: 'Customer',
+                  hintText: branchReady ? 'Select customer' : 'Select a branch first',
+                  value: _customerId,
+                  enabled: branchReady,
+                  items: [
+                    for (final customer in _customers)
+                      DropdownMenuItem<int>(
+                        value: customer.customerId,
+                        child: Text(customer.label, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _customerId = value),
+                  validator: (value) => _requiredSelection(value, 'Customer'),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _pair(
+                twoColumns: twoColumns,
+                first: AppDropdown<int>(
+                  labelText: 'Employee',
+                  hintText: branchReady ? 'Select employee' : 'Select a branch first',
+                  value: _employeeId,
+                  enabled: branchReady,
+                  items: [
+                    for (final employee in _employees)
+                      DropdownMenuItem<int>(
+                        value: employee.employeeId,
+                        child: Text(employee.label, overflow: TextOverflow.ellipsis),
+                      ),
+                  ],
+                  onChanged: (value) => setState(() => _employeeId = value),
+                  validator: (value) => _requiredSelection(value, 'Employee'),
+                ),
+                second: AppDropdown<AppointmentStatus>(
+                  labelText: 'Status',
+                  value: _status,
+                  items: [
+                    for (final status in AppointmentStatus.values)
+                      DropdownMenuItem<AppointmentStatus>(
+                        value: status,
+                        child: Text(status.label),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setState(() => _status = value);
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+              AppointmentDateField(
+                value: _appointmentDate,
+                onChanged: (date) => setState(() => _appointmentDate = date),
+                validator: _dateValidator,
+              ),
+              const SizedBox(height: 16),
+              _pair(
+                twoColumns: twoColumns,
+                first: _timeDropdown(
+                  label: 'Start Time',
+                  hint: 'Select start time',
+                  value: _startTime,
+                  onChanged: (value) {
+                    setState(() => _startTime = value);
+                    _revalidateIfNeeded();
+                  },
+                  validator: (value) => _requiredSelection(value, 'Start time'),
+                ),
+                second: _timeDropdown(
+                  label: 'End Time',
+                  hint: 'Select end time',
+                  value: _endTime,
+                  onChanged: (value) => setState(() => _endTime = value),
+                  validator: _endTimeValidator,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildServicesCard() {
+    return _sectionCard(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final twoColumns = constraints.maxWidth >= _twoColumnBreakpoint;
+          final branchReady = _branchId != null;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _buildServices(twoColumns, branchReady),
+              const SizedBox(height: 8),
+              _buildActions(constraints.maxWidth),
+            ],
+          );
+        },
       ),
     );
   }
@@ -417,14 +446,9 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Text(
-          'Services',
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 4),
-        const Text(
+        _sectionHeading(
+          'Appointment Services',
           'Add every service included in this appointment',
-          style: TextStyle(color: Colors.grey, fontSize: 13),
         ),
         const SizedBox(height: 12),
         if (twoColumns)
@@ -449,7 +473,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
             ],
           ),
         SelectedServiceList(
-          services: _selectedServices,
+          lines: _services,
           onRemove: _removeService,
         ),
         if (_serviceError != null) ...[

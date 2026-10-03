@@ -31,8 +31,8 @@ class QuickActionCard extends StatelessWidget {
           ),
           child: Padding(
             padding: const EdgeInsets.symmetric(
-              vertical: 20,
-              horizontal: 16,
+              vertical: 14,
+              horizontal: 12,
             ),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -47,14 +47,19 @@ class QuickActionCard extends StatelessWidget {
                   ),
                 ),
 
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
 
-                Text(
-                  title,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
+                Flexible(
+                  child: Text(
+                    title,
+                    textAlign: TextAlign.center,
+                    maxLines: 3,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                      height: 1.2,
+                    ),
                   ),
                 ),
               ],

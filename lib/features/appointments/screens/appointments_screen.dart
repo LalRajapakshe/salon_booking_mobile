@@ -326,7 +326,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       columns: [
         _column('Customer', flex: 1.6),
         _column('Employee', flex: 1.5),
-        _column('Service', flex: 1.8),
+        _column('Services', flex: 1.8),
         _column('Appointment Date', flex: 2.3),
         _column('Start Time', flex: 1.35),
         _column('End Time', flex: 1.25),

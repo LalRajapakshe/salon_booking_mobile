@@ -4,7 +4,7 @@ import 'package:salon_booking_mobile/features/appointments/models/appointment_st
 import 'package:salon_booking_mobile/features/appointments/screens/appointments_screen.dart';
 import 'package:salon_booking_mobile/features/appointments/screens/create_appointment_screen.dart';
 import 'package:salon_booking_mobile/features/dashboard/screens/dashboard_screen.dart';
-import 'package:salon_booking_mobile/features/dashboard/widgets/dashboard_card.dart';
+import 'package:salon_booking_mobile/features/dashboard/widgets/quick_action_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -78,6 +78,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Create Appointment'), findsWidgets);
+    expect(find.text('Appointment Services'), findsOneWidget);
     expect(dropdown<int>('Branch'), findsOneWidget);
     expect(dropdown<int>('Customer'), findsOneWidget);
     expect(dropdown<int>('Employee'), findsOneWidget);
@@ -146,6 +147,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('45 min · Rs. 2,500.00'), findsNothing);
     expect(find.text('90 min · Rs. 7,500.00'), findsOneWidget);
+    expect(dropdown<int>('Employee'), findsOneWidget);
+    expect(dropdown<TimeOfDay>('Start Time'), findsOneWidget);
+    expect(dropdown<TimeOfDay>('End Time'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
@@ -172,7 +176,7 @@ void main() {
   testWidgets('dashboard opens the appointment list and create form', (tester) async {
     await pumpAt(tester, DashboardScreen(), const Size(1400, 2400));
 
-    final appointments = find.widgetWithText(DashboardCard, 'Appointments');
+    final appointments = find.widgetWithText(QuickActionCard, 'Appointment');
     await tester.ensureVisible(appointments);
     await tester.tap(appointments);
     await tester.pumpAndSettle();
@@ -192,6 +196,7 @@ void main() {
     for (final size in const [
       Size(1440, 900),
       Size(1024, 768),
+      Size(768, 1024),
       Size(360, 800),
     ]) {
       await tester.binding.setSurfaceSize(size);
@@ -224,6 +229,7 @@ void main() {
   testWidgets('create screen builds directly without overflow', (tester) async {
     await pumpAt(tester, const CreateAppointmentScreen(), const Size(800, 700));
 
+    expect(find.text('Appointment Services'), findsOneWidget);
     expect(find.text('Employee'), findsWidgets);
     expect(find.text('Start Time'), findsWidgets);
 

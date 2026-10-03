@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:salon_booking_mobile/features/customers/screens/create_customer_screen.dart';
 import 'package:salon_booking_mobile/features/customers/screens/customers_screen.dart';
 import 'package:salon_booking_mobile/features/dashboard/screens/dashboard_screen.dart';
-import 'package:salon_booking_mobile/features/dashboard/widgets/dashboard_card.dart';
+import 'package:salon_booking_mobile/features/dashboard/widgets/quick_action_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -130,7 +130,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: DashboardScreen()));
     await tester.pumpAndSettle();
 
-    final customersModule = find.widgetWithText(DashboardCard, 'Customers');
+    final customersModule = find.widgetWithText(QuickActionCard, 'Customer');
     await tester.ensureVisible(customersModule);
     await tester.tap(customersModule);
     await tester.pumpAndSettle();
