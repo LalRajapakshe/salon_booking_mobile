@@ -9,6 +9,9 @@ import '../models/scheduling_models.dart';
 Future<void> showAppointmentSchedulePanel({
   required BuildContext context,
   required SchedulingAppointment appointment,
+  SchedulingServiceSegment? focus,
+  Future<void> Function(SchedulingServiceSegment segment)? onRescheduleLine,
+  Future<void> Function(SchedulingServiceSegment segment)? onChangeEmployeeLine,
 }) {
   return showDialog<void>(
     context: context,
@@ -18,16 +21,33 @@ Future<void> showAppointmentSchedulePanel({
         AppSnackBar.info(context, message);
       }
 
+      void closeAndRun(
+        Future<void> Function(SchedulingServiceSegment segment)? action,
+        String notedMessage,
+      ) {
+        Navigator.of(dialogContext).pop();
+        final line = focus;
+        if (action != null && line?.appointmentServiceId != null) {
+          action(line!);
+          return;
+        }
+        AppSnackBar.info(context, notedMessage);
+      }
+
       return AppointmentSchedulePanel(
         appointment: appointment,
+        focus: focus,
         onClose: () => Navigator.of(dialogContext).pop(),
         onView: () =>
             closeAndNotify('Appointment ${appointment.reference} opened.'),
-        onReschedule: () =>
-            closeAndNotify('Reschedule noted for ${appointment.reference}.'),
-        onChangeEmployee: () {
-          closeAndNotify('Employee change noted for ${appointment.reference}.');
-        },
+        onReschedule: () => closeAndRun(
+          onRescheduleLine,
+          'Reschedule noted for ${appointment.reference}.',
+        ),
+        onChangeEmployee: () => closeAndRun(
+          onChangeEmployeeLine,
+          'Employee change noted for ${appointment.reference}.',
+        ),
       );
     },
   );
@@ -35,6 +55,7 @@ Future<void> showAppointmentSchedulePanel({
 
 class AppointmentSchedulePanel extends StatelessWidget {
   final SchedulingAppointment appointment;
+  final SchedulingServiceSegment? focus;
   final VoidCallback onClose;
   final VoidCallback onView;
   final VoidCallback onReschedule;
@@ -43,6 +64,7 @@ class AppointmentSchedulePanel extends StatelessWidget {
   const AppointmentSchedulePanel({
     super.key,
     required this.appointment,
+    this.focus,
     required this.onClose,
     required this.onView,
     required this.onReschedule,
@@ -129,7 +151,9 @@ class AppointmentSchedulePanel extends StatelessWidget {
   }
 
   Widget _serviceLine(SchedulingServiceSegment segment) {
-    final staff = staffById(segment.staffId);
+    final staffName = segment.staffName ?? staffById(segment.staffId).name;
+    final selected = focus?.appointmentServiceId != null &&
+        focus!.appointmentServiceId == segment.appointmentServiceId;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -145,13 +169,27 @@ class AppointmentSchedulePanel extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            '${segment.durationMinutes} min · ${staff.name}',
+            '${segment.durationMinutes} min · $staffName',
             style: const TextStyle(color: Color(0xFF616161), fontSize: 13),
           ),
           Text(
             formatScheduleRange(segment.startMinute, segment.endMinute),
             style: const TextStyle(color: Colors.grey, fontSize: 13),
           ),
+          if (segment.durationMismatch)
+            Text(
+              'Duration ${segment.durationMinutes} min does not match this time.',
+              style: const TextStyle(
+                color: Color(0xFFE53935),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          if (selected)
+            const Text(
+              'Reschedule and Change Employee apply to this line.',
+              style: TextStyle(color: Color(0xFF5E548E), fontSize: 12),
+            ),
         ],
       ),
     );

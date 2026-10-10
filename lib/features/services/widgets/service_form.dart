@@ -66,11 +66,14 @@ class ServiceForm extends StatelessWidget {
   final TextEditingController priceController;
   final TextEditingController descriptionController;
   final String? category;
+  final List<String>? categories;
   final ValueChanged<String?> onCategoryChanged;
+  final bool showBranch;
   final int? branchId;
   final List<BranchLookup> branches;
   final ValueChanged<int?> onBranchChanged;
   final bool isActive;
+  final bool activeLocked;
   final ValueChanged<bool> onActiveChanged;
 
   const ServiceForm({
@@ -81,11 +84,14 @@ class ServiceForm extends StatelessWidget {
     required this.priceController,
     required this.descriptionController,
     required this.category,
+    this.categories,
     required this.onCategoryChanged,
+    this.showBranch = true,
     required this.branchId,
     required this.branches,
     required this.onBranchChanged,
     required this.isActive,
+    this.activeLocked = false,
     required this.onActiveChanged,
   });
 
@@ -94,6 +100,46 @@ class ServiceForm extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 640;
+        final categoryNames = categories ?? serviceCategoryNames;
+        final categoryField = AppDropdown<String>(
+          labelText: 'Category',
+          hintText: 'Select category',
+          value: category,
+          items: [
+            for (final name in categoryNames)
+              DropdownMenuItem<String>(
+                value: name,
+                child: Text(name, overflow: TextOverflow.ellipsis),
+              ),
+          ],
+          onChanged: onCategoryChanged,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return 'Category is required';
+            }
+            return null;
+          },
+        );
+        final branchField = AppDropdown<int>(
+          labelText: 'Branch',
+          hintText: 'Select branch',
+          value: branchId,
+          items: [
+            for (final branch in branches)
+              DropdownMenuItem<int>(
+                value: branch.branchId,
+                child: Text(
+                  branch.branchName,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+          onChanged: onBranchChanged,
+          validator: (value) {
+            if (value == null) return 'Branch is required';
+            return null;
+          },
+        );
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -115,48 +161,14 @@ class ServiceForm extends StatelessWidget {
               validator: validateServiceName,
             ),
             const SizedBox(height: 16),
-            _pair(
-              twoColumns: twoColumns,
-              first: AppDropdown<String>(
-                labelText: 'Category',
-                hintText: 'Select category',
-                value: category,
-                items: [
-                  for (final name in serviceCategoryNames)
-                    DropdownMenuItem<String>(
-                      value: name,
-                      child: Text(name, overflow: TextOverflow.ellipsis),
-                    ),
-                ],
-                onChanged: onCategoryChanged,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'Category is required';
-                  }
-                  return null;
-                },
-              ),
-              second: AppDropdown<int>(
-                labelText: 'Branch',
-                hintText: 'Select branch',
-                value: branchId,
-                items: [
-                  for (final branch in branches)
-                    DropdownMenuItem<int>(
-                      value: branch.branchId,
-                      child: Text(
-                        branch.branchName,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                ],
-                onChanged: onBranchChanged,
-                validator: (value) {
-                  if (value == null) return 'Branch is required';
-                  return null;
-                },
-              ),
-            ),
+            if (showBranch)
+              _pair(
+                twoColumns: twoColumns,
+                first: categoryField,
+                second: branchField,
+              )
+            else
+              categoryField,
             const SizedBox(height: 16),
             _pair(
               twoColumns: twoColumns,
@@ -196,9 +208,13 @@ class ServiceForm extends StatelessWidget {
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Active'),
-              subtitle: const Text('Shown when booking new appointments'),
-              value: isActive,
-              onChanged: onActiveChanged,
+              subtitle: Text(
+                activeLocked
+                    ? 'A new service is saved as active'
+                    : 'Shown when booking new appointments',
+              ),
+              value: activeLocked ? true : isActive,
+              onChanged: activeLocked ? null : onActiveChanged,
             ),
           ],
         );

@@ -1,16 +1,32 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
+import '../../../shared/widgets/app_snackbar.dart';
+import '../../appointments/data/appointment_repository.dart';
+import '../../appointments/data/availability_repository.dart';
+import '../../customers/data/customer_repository.dart';
+import '../../employees/data/employee_repository.dart';
+import '../../services/data/service_repository.dart';
+import '../api/scheduling_board_mapper.dart';
 import '../data/mock_scheduling_data.dart';
 import '../models/scheduling_models.dart';
 import '../widgets/appointment_schedule_panel.dart';
 import '../widgets/availability_slot.dart';
 import '../widgets/find_availability_dialog.dart';
 import '../widgets/scheduling_legend.dart';
+import '../widgets/service_line_schedule_dialog.dart';
 import '../widgets/scheduling_toolbar.dart';
 import '../widgets/time_slot_grid.dart';
 
 class SchedulingBoardScreen extends StatefulWidget {
-  const SchedulingBoardScreen({super.key});
+  final AppointmentRepository? appointments;
+  final AvailabilityRepository? availability;
+
+  const SchedulingBoardScreen({
+    super.key,
+    this.appointments,
+    this.availability,
+  });
 
   @override
   State<SchedulingBoardScreen> createState() => _SchedulingBoardScreenState();
@@ -21,15 +37,38 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
   String _staffFilter = 'All';
   String _serviceFilter = 'All';
   String _statusFilter = 'All';
+  bool _loading = false;
+  String? _error;
+  SchedulingBoardDay _loaded = const SchedulingBoardDay(
+    staff: [],
+    appointments: [],
+  );
+  late final AppointmentRepository _repository;
+  late final AvailabilityRepository _availability;
+  late final EmployeeRepository _employees;
+  late final CustomerRepository _customers;
+  late final ServiceRepository _services;
+
+  bool get _demo => !_repository.isApiBacked;
+
+  /// Production loads employees, customers, and services. Tests that inject
+  /// the appointment repository keep the appointment payload alone.
+  bool get _useDirectory => widget.appointments == null && !_demo;
+
+  List<SchedulingAppointment> get _appointments =>
+      _demo ? appointmentsForDate(_date) : _loaded.appointments;
+
+  List<SchedulingStaff> get _allStaff =>
+      _demo ? schedulingStaff : _loaded.staff;
 
   List<SchedulingStaff> get _visibleStaff {
-    if (_staffFilter == 'All') return schedulingStaff;
-    return schedulingStaff
-        .where((staff) => staff.name == _staffFilter)
-        .toList();
+    if (_staffFilter == 'All') return _allStaff;
+    return _allStaff.where((staff) => staff.name == _staffFilter).toList();
   }
 
-  List<SchedulingBlock> get _blocks => blocksForDate(_date);
+  List<SchedulingBlock> get _blocks => _demo
+      ? blocksForDate(_date)
+      : [for (final appointment in _appointments) ...appointment.toBlocks()];
 
   List<SchedulingBlock> get _visibleBlocks {
     final ids = _visibleStaff.map((staff) => staff.staffId).toSet();
@@ -51,9 +90,27 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     return notes;
   }
 
+  List<String> get _serviceNames {
+    if (_demo) return schedulingServiceNames();
+    final names = <String>{
+      for (final appointment in _appointments)
+        for (final segment in appointment.services) segment.serviceName,
+    };
+    final sorted = names.toList()..sort();
+    return sorted;
+  }
+
+  List<String> get _statuses {
+    if (_demo) return schedulingStatuses;
+    final names = _appointments.map((item) => item.status).toSet().toList()
+      ..sort();
+    return names;
+  }
+
   String get _summary {
+    if (!_demo && _loading) return 'Loading schedule';
     final ids = _visibleStaff.map((staff) => staff.staffId).toSet();
-    final count = appointmentsForDate(_date).where((appointment) {
+    final count = _appointments.where((appointment) {
       return appointment.services.any(
         (segment) => ids.contains(segment.staffId),
       );
@@ -71,10 +128,168 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     return serviceOff || statusOff;
   }
 
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.appointments ?? AppointmentRepository();
+    _availability = widget.availability ?? AvailabilityRepository();
+    _employees = EmployeeRepository();
+    _customers = CustomerRepository();
+    _services = ServiceRepository();
+    if (_repository.isApiBacked) {
+      final now = DateTime.now();
+      _date = DateTime(now.year, now.month, now.day);
+      _loading = true;
+      _load();
+    }
+  }
+
   void _shiftDay(int days) {
     setState(() {
       _date = DateTime(_date.year, _date.month, _date.day + days);
+      if (!_demo) {
+        _loading = true;
+        _error = null;
+      }
     });
+    _load();
+  }
+
+  void _goToday() {
+    final now = DateTime.now();
+    setState(() {
+      _date = _demo
+          ? schedulingDemoDate
+          : DateTime(now.year, now.month, now.day);
+      if (!_demo) {
+        _loading = true;
+        _error = null;
+      }
+    });
+    _load();
+  }
+
+  Future<void> _load() async {
+    if (_demo) return;
+    final date = _date;
+    try {
+      final appointments = await _repository.list(date: date);
+      final directory = _useDirectory ? await _directory() : _BoardDirectory.empty;
+      if (!mounted || date != _date) return;
+      final day = SchedulingBoardMapper.map(
+        appointments,
+        date,
+        roster: directory.roster,
+        customerNames: directory.customerNames,
+        serviceNames: directory.serviceNames,
+      );
+      setState(() {
+        _loading = false;
+        _error = null;
+        _loaded = day;
+        _alignFilters();
+      });
+    } catch (error) {
+      if (!mounted || date != _date) return;
+      setState(() {
+        _loading = false;
+        _error = error is ApiException
+            ? error.message
+            : 'The schedule could not be loaded.';
+      });
+    }
+  }
+
+  Future<_BoardDirectory> _directory() async {
+    final roster = <SchedulingStaff>[];
+    final customerNames = <int, String>{};
+    final serviceNames = <int, String>{};
+    try {
+      for (final employee in await _employees.list()) {
+        roster.add(
+          SchedulingStaff(
+            staffId: '${employee.id}',
+            name: employee.fullName,
+            role: employee.designation ?? '',
+          ),
+        );
+      }
+    } on ApiException {
+      // Appointment blocks can still name the employee by id.
+    }
+    try {
+      for (final customer in await _customers.list()) {
+        customerNames[customer.id] = customer.fullName;
+      }
+    } on ApiException {}
+    try {
+      for (final service in await _services.list()) {
+        serviceNames[service.serviceId] = service.serviceName;
+      }
+    } on ApiException {}
+    return _BoardDirectory(roster, customerNames, serviceNames);
+  }
+
+  void _retry() {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    _load();
+  }
+
+  void _alignFilters() {
+    if (_staffFilter != 'All' &&
+        !_allStaff.any((staff) => staff.name == _staffFilter)) {
+      _staffFilter = 'All';
+    }
+    if (_serviceFilter != 'All' && !_serviceNames.contains(_serviceFilter)) {
+      _serviceFilter = 'All';
+    }
+    if (_statusFilter != 'All' && !_statuses.contains(_statusFilter)) {
+      _statusFilter = 'All';
+    }
+  }
+
+  SchedulingAppointment? _appointmentByReference(String? reference) {
+    if (reference == null) return null;
+    if (_demo) return appointmentByReference(reference);
+    for (final appointment in _appointments) {
+      if (appointment.reference == reference) return appointment;
+    }
+    return null;
+  }
+
+  SchedulingServiceSegment? _segmentFor(SchedulingBlock block) {
+    final appointment = _appointmentByReference(block.appointmentReference);
+    if (appointment == null) return null;
+    for (final segment in appointment.services) {
+      if (segment.staffId == block.staffId &&
+          segment.startMinute == block.startMinute &&
+          segment.endMinute == block.endMinute) {
+        return segment;
+      }
+    }
+    return null;
+  }
+
+  Future<void> _scheduleLine(
+    SchedulingServiceSegment segment, {
+    required bool changeEmployee,
+  }) async {
+    final result = await showServiceLineScheduleDialog(
+      context: context,
+      segment: segment,
+      date: _date,
+      availability: _availability,
+      appointments: _repository,
+      changeEmployee: changeEmployee,
+    );
+    if (!mounted) return;
+    if (result.scheduled) {
+      AppSnackBar.success(context, 'The service was rescheduled.');
+    }
+    if (result.scheduled || result.refreshed) await _load();
   }
 
   @override
@@ -102,12 +317,12 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
               staffFilter: _staffFilter,
               serviceFilter: _serviceFilter,
               statusFilter: _statusFilter,
-              staffNames: schedulingStaff.map((staff) => staff.name).toList(),
-              serviceNames: schedulingServiceNames(),
-              statuses: schedulingStatuses,
+              staffNames: _allStaff.map((staff) => staff.name).toList(),
+              serviceNames: _serviceNames,
+              statuses: _statuses,
               onPrevious: () => _shiftDay(-1),
               onNext: () => _shiftDay(1),
-              onToday: () => setState(() => _date = schedulingDemoDate),
+              onToday: _goToday,
               onStaffChanged: (value) =>
                   setState(() => _staffFilter = value ?? 'All'),
               onServiceChanged: (value) =>
@@ -146,32 +361,7 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: TimeSlotGrid(
-                  key: ValueKey(
-                    '${_date.toIso8601String()}|$_staffFilter|$_serviceFilter|$_statusFilter',
-                  ),
-                  staff: _visibleStaff,
-                  blocks: _visibleBlocks,
-                  isDimmed: _isDimmed,
-                  onAppointmentTap: (block) {
-                    final appointment = appointmentByReference(
-                      block.appointmentReference,
-                    );
-                    if (appointment == null) return;
-                    showAppointmentSchedulePanel(
-                      context: context,
-                      appointment: appointment,
-                    );
-                  },
-                  onAvailableTap: (staff, startMinute) {
-                    showOpenSlotDialog(
-                      context: context,
-                      staff: staff,
-                      date: _date,
-                      startMinute: startMinute,
-                    );
-                  },
-                ),
+                child: _boardBody(),
               ),
             ),
           ],
@@ -179,6 +369,112 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
       ),
     );
   }
+
+  Widget _boardBody() {
+    if (!_demo && _loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (!_demo && _error != null) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(_error!, textAlign: TextAlign.center),
+              const SizedBox(height: 12),
+              OutlinedButton(onPressed: _retry, child: const Text('Retry')),
+            ],
+          ),
+        ),
+      );
+    }
+    final unscheduled = _demo ? const <UnscheduledVisit>[] : _loaded.unscheduled;
+    if (!_demo && _allStaff.isEmpty && unscheduled.isEmpty) {
+      return const Center(
+        child: Text('No scheduled services for this day.'),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (unscheduled.isNotEmpty) _unscheduledPanel(unscheduled),
+        if (_allStaff.isNotEmpty)
+          Expanded(
+            child: TimeSlotGrid(
+      key: ValueKey(
+        '${_date.toIso8601String()}|$_staffFilter|$_serviceFilter|$_statusFilter',
+      ),
+      staff: _visibleStaff,
+      blocks: _visibleBlocks,
+      isDimmed: _isDimmed,
+      onAppointmentTap: (block) {
+        final appointment = _appointmentByReference(block.appointmentReference);
+        if (appointment == null) return;
+        final segment = _segmentFor(block);
+        showAppointmentSchedulePanel(
+          context: context,
+          appointment: appointment,
+          focus: segment,
+          onRescheduleLine: _demo
+              ? null
+              : (line) => _scheduleLine(line, changeEmployee: false),
+          onChangeEmployeeLine: _demo
+              ? null
+              : (line) => _scheduleLine(line, changeEmployee: true),
+        );
+      },
+      onAvailableTap: (staff, startMinute) {
+        showOpenSlotDialog(
+          context: context,
+          staff: staff,
+          date: _date,
+          startMinute: startMinute,
+        );
+      },
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _unscheduledPanel(List<UnscheduledVisit> visits) {
+    return Material(
+      color: const Color(0xffF7F8FC),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Not placed on the board',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 6),
+            for (final visit in visits)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  '${visit.customerName} · ${visit.servicesLabel} · ${visit.status}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BoardDirectory {
+  final List<SchedulingStaff> roster;
+  final Map<int, String> customerNames;
+  final Map<int, String> serviceNames;
+
+  const _BoardDirectory(this.roster, this.customerNames, this.serviceNames);
+
+  static const empty = _BoardDirectory([], {}, {});
 }
 
 class _ConflictNotice extends StatelessWidget {

@@ -3,17 +3,8 @@ import 'package:flutter/material.dart';
 import 'appointment_service_line.dart';
 import 'appointment_status.dart';
 
-/// Presentation appointment (the booking header).
-///
-/// `SalonBooking.Domain.Entities.Appointment` has no properties, DTOs,
-/// or validators, and there is no `AppointmentService` entity. These
-/// members are the screen fields, using the same id names as Branch,
-/// Customer, Employee, and Service.
-/// Employee, start time, and end time stay on the appointment. Each
-/// [AppointmentServiceLine] only identifies a service on this booking.
-/// `Staff` is an empty class, so the person on the appointment is
-/// `employeeId`. Customer has `Remarks`; Appointment does not, so this
-/// model has no notes field.
+/// Screen appointment. Employee and times on this header are the list's
+/// display span. The API stores those values on each service line.
 class Appointment {
   final int appointmentId;
   final int branchId;
@@ -24,6 +15,11 @@ class Appointment {
   final int employeeId;
   final AppointmentStatus status;
   final List<AppointmentServiceLine> appointmentServices;
+  final String? customerName;
+  final String? employeeName;
+  final String? notes;
+  final String? schedulingState;
+  final bool hasScheduledTime;
 
   const Appointment({
     required this.appointmentId,
@@ -35,5 +31,10 @@ class Appointment {
     required this.employeeId,
     required this.status,
     required this.appointmentServices,
+    this.customerName,
+    this.employeeName,
+    this.notes,
+    this.schedulingState,
+    this.hasScheduledTime = true,
   });
 }

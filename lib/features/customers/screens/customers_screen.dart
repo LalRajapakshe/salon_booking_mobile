@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
+import '../data/customer_repository.dart';
 import '../models/customer_model.dart';
 import 'create_customer_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
-  const CustomersScreen({super.key});
+  final CustomerRepository? repository;
+
+  const CustomersScreen({super.key, this.repository});
 
   @override
   State<CustomersScreen> createState() => _CustomersScreenState();
@@ -25,9 +29,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
   /// table instead of squeezing the page.
   static const double _minTableWidth = 960;
 
-  // Temporary mock data using the existing Customer model.
-  // Replace this list with repository/API data later.
-  final List<Customer> _customers = [
+  late final CustomerRepository _repository;
+  bool _loading = false;
+  String? _loadError;
+
+  // Signed-out sessions keep this local list. A signed-in session replaces
+  // it from GET /api/Customers before the first frame.
+  List<Customer> _customers = [
     Customer(
       id: 1,
       customerCode: 'CUS-001',
@@ -199,6 +207,41 @@ class _CustomersScreenState extends State<CustomersScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? CustomerRepository();
+    if (_repository.isApiBacked) {
+      _customers = [];
+      _loading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final customers = await _repository.list();
+      if (!mounted) return;
+      setState(() {
+        _customers = customers;
+        _loading = false;
+        if (_currentPage > _totalPages) _currentPage = _totalPages;
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = error.message;
+        _loading = false;
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _tableScrollController.dispose();
@@ -326,13 +369,14 @@ class _CustomersScreenState extends State<CustomersScreen> {
     );
 
     final addButton = ElevatedButton.icon(
-      onPressed: () {
-        Navigator.push(
+      onPressed: () async {
+        final saved = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
-            builder: (_) => const CreateCustomerScreen(),
+            builder: (_) => CreateCustomerScreen(repository: _repository),
           ),
         );
+        if (saved == true && _repository.isApiBacked) await _load();
       },
       icon: const Icon(Icons.person_add_alt_1),
       label: const Text('Add Customer'),
@@ -475,6 +519,28 @@ class _CustomersScreenState extends State<CustomersScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          if (_loading) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          if (_loadError != null) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
+              child: Column(
+                children: [
+                  Text(
+                    _loadError!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                ],
+              ),
+            );
+          }
           final table = _customerTable(pagedCustomers);
           final available = constraints.maxWidth;
 

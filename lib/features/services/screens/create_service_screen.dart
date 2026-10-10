@@ -1,18 +1,29 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../appointments/data/mock_appointment_data.dart';
+import '../api/service_api_mapper.dart';
 import '../data/service_directory.dart';
+import '../data/service_repository.dart';
 import '../models/service_management_models.dart';
 import '../widgets/service_form.dart';
 
 class CreateServiceScreen extends StatefulWidget {
   final ServiceDirectory directory;
   final SalonService? service;
+  final bool persistToApi;
+  final ServiceRepository? services;
 
-  const CreateServiceScreen({super.key, required this.directory, this.service});
+  const CreateServiceScreen({
+    super.key,
+    required this.directory,
+    this.service,
+    this.persistToApi = false,
+    this.services,
+  });
 
   bool get isEditing => service != null;
 
@@ -33,10 +44,25 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
   int? _branchId;
   bool _isActive = true;
   bool _validateOnInteraction = false;
+  bool _saving = false;
+  String? _saveError;
+  bool _loadingCategories = false;
+  String? _categoryError;
+  List<ServiceCategoryRecord> _categories = [];
+  late final ServiceRepository _services;
+
+  bool get _apiCreate => widget.persistToApi && !widget.isEditing;
 
   @override
   void initState() {
     super.initState();
+    _services = widget.services ?? ServiceRepository();
+    if (_apiCreate) {
+      _loadingCategories = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadCategories();
+      });
+    }
     final service = widget.service;
     if (service != null) {
       _codeController.text = service.serviceCode;
@@ -67,7 +93,32 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     Navigator.of(context).pop();
   }
 
-  void _save() {
+  Future<void> _loadCategories() async {
+    setState(() {
+      _loadingCategories = true;
+      _categoryError = null;
+    });
+    try {
+      final categories = await _services.categories();
+      if (!mounted) return;
+      setState(() {
+        _categories = categories;
+        _loadingCategories = false;
+        if (_category != null &&
+            !categories.any((item) => item.categoryName == _category)) {
+          _category = null;
+        }
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingCategories = false;
+        _categoryError = error.message;
+      });
+    }
+  }
+
+  Future<void> _save() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) {
       setState(() => _validateOnInteraction = true);
@@ -86,7 +137,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     final duration = tryParseDuration(_durationController.text);
     final price = tryParsePrice(_priceController.text);
     if (category == null ||
-        branchId == null ||
+        (!_apiCreate && branchId == null) ||
         duration == null ||
         price == null) {
       setState(() => _validateOnInteraction = true);
@@ -96,6 +147,40 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     final name = _nameController.text.trim();
     final description = _descriptionController.text.trim();
     final existing = widget.service;
+
+    if (_apiCreate) {
+      final matches = _categories.where((item) => item.categoryName == category);
+      if (matches.isEmpty) {
+        setState(() => _saveError = 'Category is required');
+        return;
+      }
+      setState(() {
+        _saving = true;
+        _saveError = null;
+      });
+      try {
+        final created = await _services.create(
+          serviceCategoryId: matches.first.serviceCategoryId,
+          serviceName: name,
+          description: description,
+          durationMinutes: duration,
+          price: price,
+          categoryName: category,
+        );
+        if (!mounted) return;
+        AppSnackBar.success(context, '${created.serviceName} was saved.');
+        Navigator.of(context).pop(created);
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _saving = false;
+          _saveError = error.message;
+        });
+      }
+      return;
+    }
+
+    if (branchId == null) return;
 
     final SalonService saved;
     if (existing == null) {
@@ -148,6 +233,24 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final padding = constraints.maxWidth < 520 ? 16.0 : 24.0;
+          if (_apiCreate && _loadingCategories) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (_apiCreate && _categoryError != null) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_categoryError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  OutlinedButton(
+                    onPressed: _loadCategories,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
           return SingleChildScrollView(
             controller: _scrollController,
             padding: EdgeInsets.all(padding),
@@ -201,19 +304,34 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
                                     descriptionController:
                                         _descriptionController,
                                     category: _category,
+                                    categories: _apiCreate
+                                        ? {
+                                            for (final item in _categories)
+                                              item.categoryName,
+                                          }.toList()
+                                        : null,
                                     onCategoryChanged: (value) {
                                       setState(() => _category = value);
                                     },
+                                    showBranch: !_apiCreate,
                                     branchId: _branchId,
                                     branches: mockBranches,
                                     onBranchChanged: (value) {
                                       setState(() => _branchId = value);
                                     },
                                     isActive: _isActive,
+                                    activeLocked: _apiCreate,
                                     onActiveChanged: (value) {
                                       setState(() => _isActive = value);
                                     },
                                   ),
+                                  if (_saveError != null) ...[
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      _saveError!,
+                                      style: const TextStyle(color: Colors.red),
+                                    ),
+                                  ],
                                   const SizedBox(height: 8),
                                   _buildActions(cardConstraints.maxWidth),
                                 ],
@@ -238,13 +356,14 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       text: 'Cancel',
       icon: Icons.close,
       width: maxWidth < 520 ? double.infinity : 160,
-      onPressed: _cancel,
+      onPressed: _saving ? null : _cancel,
     );
     final save = AppPrimaryButton(
       text: 'Save',
       icon: Icons.check,
       width: maxWidth < 520 ? double.infinity : 160,
-      onPressed: _save,
+      isLoading: _saving,
+      onPressed: _saving ? null : _save,
     );
 
     if (maxWidth < 520) {

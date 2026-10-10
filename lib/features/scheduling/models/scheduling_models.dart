@@ -1,9 +1,8 @@
-/// Presentation-only scheduling types for the staff board.
+/// Presentation types for the staff board.
 ///
-/// These are not Appointment or AppointmentService fields. The existing
-/// domain keeps employee and time on the appointment header. This board
-/// uses its own mock data so a service can be shown on a different
-/// employee and time without changing those models.
+/// A signed-in board maps each scheduled appointment service line into
+/// these types. Employee and time belong to the line. Signed-out and
+/// widget tests keep the local demo data.
 enum ScheduleBlockKind { booked, onBreak, leave, offDuty }
 
 enum StaffDayState { open, busy, leave, offDuty }
@@ -34,6 +33,13 @@ class SchedulingServiceSegment {
   final int startMinute;
   final int endMinute;
   final bool conflict;
+  final String? staffName;
+  final int? appointmentId;
+  final int? appointmentServiceId;
+  final int? serviceId;
+  final int? employeeId;
+  final String? rowVersion;
+  final bool durationMismatch;
 
   const SchedulingServiceSegment({
     required this.serviceName,
@@ -42,6 +48,27 @@ class SchedulingServiceSegment {
     required this.startMinute,
     required this.endMinute,
     this.conflict = false,
+    this.staffName,
+    this.appointmentId,
+    this.appointmentServiceId,
+    this.serviceId,
+    this.employeeId,
+    this.rowVersion,
+    this.durationMismatch = false,
+  });
+}
+
+class UnscheduledVisit {
+  final String reference;
+  final String customerName;
+  final String status;
+  final String servicesLabel;
+
+  const UnscheduledVisit({
+    required this.reference,
+    required this.customerName,
+    required this.status,
+    required this.servicesLabel,
   });
 }
 
@@ -70,7 +97,9 @@ class SchedulingAppointment {
     return [
       for (final segment in services)
         SchedulingBlock(
-          blockId: '$reference-${segment.staffId}-${segment.startMinute}',
+          blockId: segment.appointmentServiceId == null
+              ? '$reference-${segment.staffId}-${segment.startMinute}'
+              : '$reference-${segment.appointmentServiceId}',
           staffId: segment.staffId,
           date: date,
           kind: ScheduleBlockKind.booked,
@@ -81,6 +110,9 @@ class SchedulingAppointment {
           subtitle: segment.serviceName,
           status: status,
           conflict: segment.conflict,
+          notice: segment.durationMismatch
+              ? 'Duration ${segment.durationMinutes} min does not match this time.'
+              : null,
         ),
     ];
   }
@@ -98,6 +130,7 @@ class SchedulingBlock {
   final String subtitle;
   final String? status;
   final bool conflict;
+  final String? notice;
 
   const SchedulingBlock({
     required this.blockId,
@@ -111,6 +144,7 @@ class SchedulingBlock {
     required this.subtitle,
     this.status,
     this.conflict = false,
+    this.notice,
   });
 
   bool coversMinute(int minute) {

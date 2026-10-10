@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../shared/theme/theme.dart';
+import '../../../shared/widgets/app_snackbar.dart';
+import '../services/auth_api.dart';
 import '../widgets/login_form.dart';
 import '../widgets/login_header.dart';
 import '../widgets/login_logo.dart';
@@ -51,8 +54,25 @@ class _LoginScreenState extends State<LoginScreen> {
     _isLoading = true;
   });
 
-  // Temporary login delay
-  await Future.delayed(const Duration(seconds: 1));
+  try {
+    await AuthApi().login(
+      username: _usernameController.text.trim(),
+      password: _passwordController.text,
+    );
+  } on ApiException catch (error) {
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    final message = error.statusCode == 401
+        ? 'The username or password is incorrect.'
+        : error.message;
+    AppSnackBar.error(context, message);
+    return;
+  } catch (_) {
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+    AppSnackBar.error(context, 'Sign in could not be completed.');
+    return;
+  }
 
   if (!mounted) return;
 

@@ -20,13 +20,17 @@ void main() {
     return find.widgetWithText(DropdownButtonFormField<T>, label);
   }
 
-  Future<void> choose<T>(WidgetTester tester, String label, String option) async {
-    final field = dropdown<T>(label);
+  Future<void> chooseAt<T>(WidgetTester tester, String label, int index, String option) async {
+    final field = dropdown<T>(label).at(index);
     await tester.ensureVisible(field);
     await tester.tap(field);
     await tester.pumpAndSettle();
     await tester.tap(find.text(option).last);
     await tester.pumpAndSettle();
+  }
+
+  Future<void> choose<T>(WidgetTester tester, String label, String option) async {
+    await chooseAt<T>(tester, label, 0, option);
   }
 
   testWidgets('appointment list filters search, status, and date', (tester) async {
@@ -78,49 +82,34 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Create Appointment'), findsWidgets);
-    expect(find.text('Appointment Services'), findsOneWidget);
-    expect(dropdown<int>('Branch'), findsOneWidget);
+    expect(find.text('Services'), findsOneWidget);
+    expect(dropdown<int>('Branch'), findsNothing);
     expect(dropdown<int>('Customer'), findsOneWidget);
-    expect(dropdown<int>('Employee'), findsOneWidget);
     expect(dropdown<AppointmentStatus>('Status'), findsOneWidget);
     expect(find.widgetWithText(TextFormField, 'Appointment Date'), findsOneWidget);
-    expect(dropdown<TimeOfDay>('Start Time'), findsOneWidget);
-    expect(dropdown<TimeOfDay>('End Time'), findsOneWidget);
+    expect(dropdown<int>('Stylist'), findsNothing);
+    expect(dropdown<TimeOfDay>('Start'), findsNothing);
     expect(dropdown<int>('Service'), findsOneWidget);
     expect(find.text('Notes'), findsNothing);
     expect(find.text('Remarks'), findsNothing);
     expect(find.text('Quantity'), findsNothing);
 
-    final branch = tester.getTopLeft(dropdown<int>('Branch'));
     final customer = tester.getTopLeft(dropdown<int>('Customer'));
-    expect((branch.dy - customer.dy).abs(), lessThan(8));
+    final status = tester.getTopLeft(dropdown<AppointmentStatus>('Status'));
+    expect((customer.dy - status.dy).abs(), lessThan(8));
 
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Branch is required'), findsOneWidget);
     expect(find.text('Customer is required'), findsOneWidget);
-    expect(find.text('Employee is required'), findsOneWidget);
     expect(find.text('Appointment date is required'), findsOneWidget);
-    expect(find.text('Start time is required'), findsOneWidget);
-    expect(find.text('End time is required'), findsOneWidget);
     expect(find.text('Service is required'), findsOneWidget);
+    expect(find.text('Branch is required'), findsNothing);
+    expect(find.text('Employee is required'), findsNothing);
     expect(find.text('Create Appointment'), findsWidgets);
 
-    await choose<int>(tester, 'Branch', 'Colombo (BR-001)');
     await choose<int>(tester, 'Customer', 'Amanda Silva (CUS-001)');
-    await choose<int>(tester, 'Employee', 'Kevin Perera · Stylist');
-    await choose<TimeOfDay>(tester, 'Start Time', '10:00');
-    await choose<TimeOfDay>(tester, 'End Time', '09:00');
-
-    await tester.ensureVisible(find.text('Save'));
-    await tester.tap(find.text('Save'));
-    await tester.pumpAndSettle();
-    expect(find.text('End time must be after start time'), findsOneWidget);
-
-    await choose<TimeOfDay>(tester, 'Start Time', '09:00');
-    await choose<TimeOfDay>(tester, 'End Time', '10:00');
 
     final dateField = find.widgetWithText(TextFormField, 'Appointment Date');
     await tester.ensureVisible(dateField);
@@ -135,21 +124,27 @@ void main() {
     await tester.ensureVisible(find.text('Add'));
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
+
+    expect(find.textContaining('Duration: 45 min'), findsOneWidget);
+    expect(find.textContaining('Price: Rs. 2,500.00'), findsOneWidget);
+    expect(find.text('Unscheduled'), findsOneWidget);
+
+    await tester.ensureVisible(find.text('Find Availability'));
+    await tester.tap(find.text('Find Availability'));
+    await tester.pumpAndSettle();
+    expect(find.text('Sign in is required.'), findsOneWidget);
+    expect(find.text('Unscheduled'), findsOneWidget);
+
     await choose<int>(tester, 'Service', 'Hair Colour · 90 min · Rs. 7,500.00');
     await tester.ensureVisible(find.text('Add'));
     await tester.tap(find.text('Add'));
     await tester.pumpAndSettle();
 
-    expect(find.text('45 min · Rs. 2,500.00'), findsOneWidget);
-    expect(find.text('90 min · Rs. 7,500.00'), findsOneWidget);
-
     await tester.tap(find.byTooltip('Remove Hair Cut'));
     await tester.pumpAndSettle();
-    expect(find.text('45 min · Rs. 2,500.00'), findsNothing);
-    expect(find.text('90 min · Rs. 7,500.00'), findsOneWidget);
-    expect(dropdown<int>('Employee'), findsOneWidget);
-    expect(dropdown<TimeOfDay>('Start Time'), findsOneWidget);
-    expect(dropdown<TimeOfDay>('End Time'), findsOneWidget);
+    expect(find.textContaining('Duration: 45 min'), findsNothing);
+    expect(find.textContaining('Duration: 90 min'), findsOneWidget);
+    expect(find.text('Find Availability'), findsOneWidget);
 
     await tester.ensureVisible(find.text('Save'));
     await tester.tap(find.text('Save'));
@@ -185,8 +180,9 @@ void main() {
     await tester.tap(find.text('Add Appointment'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Branch'), findsWidgets);
+    expect(find.text('Customer'), findsWidgets);
     expect(find.text('Service'), findsWidgets);
+    expect(find.text('Branch'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 
@@ -209,12 +205,12 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Create Appointment'), findsWidgets);
 
-      final branch = tester.getTopLeft(dropdown<int>('Branch'));
       final customer = tester.getTopLeft(dropdown<int>('Customer'));
+      final status = tester.getTopLeft(dropdown<AppointmentStatus>('Status'));
       if (size.width >= 640) {
-        expect((branch.dy - customer.dy).abs(), lessThan(8));
+        expect((customer.dy - status.dy).abs(), lessThan(8));
       } else {
-        expect(customer.dy, greaterThan(branch.dy + 20));
+        expect(status.dy, greaterThan(customer.dy + 20));
       }
 
       await tester.ensureVisible(find.text('Save'));
@@ -229,13 +225,14 @@ void main() {
   testWidgets('create screen builds directly without overflow', (tester) async {
     await pumpAt(tester, const CreateAppointmentScreen(), const Size(800, 700));
 
-    expect(find.text('Appointment Services'), findsOneWidget);
-    expect(find.text('Employee'), findsWidgets);
-    expect(find.text('Start Time'), findsWidgets);
+    expect(find.text('Services'), findsOneWidget);
+    expect(find.text('Customer'), findsWidgets);
+    expect(dropdown<int>('Stylist'), findsNothing);
+    expect(dropdown<TimeOfDay>('Start'), findsNothing);
 
-    final branch = tester.getTopLeft(dropdown<int>('Branch'));
     final customer = tester.getTopLeft(dropdown<int>('Customer'));
-    expect((branch.dy - customer.dy).abs(), lessThan(8));
+    final status = tester.getTopLeft(dropdown<AppointmentStatus>('Status'));
+    expect((customer.dy - status.dy).abs(), lessThan(8));
     expect(tester.takeException(), isNull);
   });
 }

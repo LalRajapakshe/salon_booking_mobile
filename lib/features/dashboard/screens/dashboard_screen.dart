@@ -17,6 +17,7 @@ import '../widgets/section_title.dart';
 
 import '../../appointments/screens/appointments_screen.dart';
 import '../../customers/screens/customers_screen.dart';
+import '../../employees/screens/employees_screen.dart';
 import '../../revenue/screens/revenue_dashboard_screen.dart';
 import '../../scheduling/screens/scheduling_board_screen.dart';
 import '../../services/screens/services_screen.dart';
@@ -424,7 +425,7 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
       icon: Icons.badge,
       title: 'Employee',
       color: Colors.deepPurple,
-      onTap: () => _showComingSoon(context, 'Employee'),
+      onTap: () => _openScreen(context, const EmployeesScreen()),
     ),
     _DashboardItem(
       icon: Icons.receipt_long,

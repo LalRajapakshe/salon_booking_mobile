@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../shared/utils/date_formatter.dart';
+import '../../customers/data/customer_repository.dart';
+import '../../services/data/service_repository.dart';
+import '../data/appointment_repository.dart';
+import '../data/availability_repository.dart';
 import '../models/appointment.dart';
 import '../models/appointment_status.dart';
 import '../models/appointment_time.dart';
@@ -9,7 +14,23 @@ import '../widgets/appointment_status_badge.dart';
 import 'create_appointment_screen.dart';
 
 class AppointmentsScreen extends StatefulWidget {
-  const AppointmentsScreen({super.key});
+  const AppointmentsScreen({
+    super.key,
+    this.repository,
+    this.availabilityRepository,
+    this.customers,
+    this.services,
+    this.liveLookups,
+  });
+
+  final AppointmentRepository? repository;
+  final AvailabilityRepository? availabilityRepository;
+  final CustomerRepository? customers;
+  final ServiceRepository? services;
+
+  /// Signed-in production loads customers and services from the API.
+  /// Tests that inject [repository] keep the local catalog unless this is set.
+  final bool? liveLookups;
 
   @override
   State<AppointmentsScreen> createState() => _AppointmentsScreenState();
@@ -21,10 +42,75 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
   String _statusFilter = 'All';
   String _dateFilter = 'All';
+  late final AppointmentRepository _repository = widget.repository ?? AppointmentRepository();
+  late final AvailabilityRepository _availabilityRepository =
+      widget.availabilityRepository ?? AvailabilityRepository();
+  late final CustomerRepository _customers = widget.customers ?? CustomerRepository();
+  late final ServiceRepository _services = widget.services ?? ServiceRepository();
+  List<Appointment> _appointments = const [];
+  Map<int, String> _customerNames = const {};
+  Map<int, String> _serviceNames = const {};
+  bool _loading = true;
+  String? _error;
+
+  bool get _liveLookups =>
+      widget.liveLookups ?? (widget.repository == null && _repository.isApiBacked);
 
   static const double _minTableWidth = 980;
   static const double _headingRowHeight = 56;
   static const double _dataRowHeight = 64;
+
+  @override
+  void initState() {
+    super.initState();
+    _load(showSpinner: false);
+  }
+
+  Future<void> _load({bool showSpinner = true}) async {
+    if (showSpinner) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      final appointments = await _repository.list();
+      final names = _liveLookups ? await _loadNames() : (customers: _customerNames, services: _serviceNames);
+      if (!mounted) return;
+      setState(() {
+        _appointments = appointments;
+        _customerNames = names.customers;
+        _serviceNames = names.services;
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = error is ApiException ? error.message : 'Appointments could not be loaded.';
+      });
+    }
+  }
+
+  Future<({Map<int, String> customers, Map<int, String> services})> _loadNames() async {
+    final customers = <int, String>{};
+    final services = <int, String>{};
+    try {
+      for (final customer in await _customers.list()) {
+        customers[customer.id] = customer.fullName;
+      }
+    } on ApiException {
+      // The appointment rows still render with the customer id.
+    }
+    try {
+      for (final service in await _services.list()) {
+        services[service.serviceId] = service.serviceName;
+      }
+    } on ApiException {
+      // The appointment rows still render with the service id.
+    }
+    return (customers: customers, services: services);
+  }
 
   @override
   void dispose() {
@@ -37,17 +123,16 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     final query = _searchController.text.trim().toLowerCase();
     final status = AppointmentStatus.fromLabel(_statusFilter);
 
-    final matches = AppointmentCatalog.appointments.where((appointment) {
+    final matches = _appointments.where((appointment) {
       if (status != null && appointment.status != status) return false;
       if (_dateFilter != 'All' && _dateKey(appointment.appointmentDate) != _dateFilter) {
         return false;
       }
       if (query.isEmpty) return true;
 
-      final customer = AppointmentCatalog.customer(appointment.customerId);
-      final employee = AppointmentCatalog.employee(appointment.employeeId);
-      final services = AppointmentCatalog.serviceSummary(appointment);
-      final haystack = '${customer.fullName} ${employee.fullName} $services'.toLowerCase();
+      final haystack =
+          '${_customerLabel(appointment)} ${_employeeLabel(appointment)} ${_serviceLabel(appointment)}'
+              .toLowerCase();
       return haystack.contains(query);
     }).toList();
 
@@ -60,7 +145,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   }
 
   List<String> get _dateOptions {
-    final keys = AppointmentCatalog.appointments
+    final keys = _appointments
         .map((item) => _dateKey(item.appointmentDate))
         .toSet()
         .toList()
@@ -131,13 +216,20 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     );
 
     final addButton = ElevatedButton.icon(
-      onPressed: () {
-        Navigator.push(
+      onPressed: () async {
+        final saved = await Navigator.push<bool>(
           context,
           MaterialPageRoute(
-            builder: (_) => const CreateAppointmentScreen(),
+            builder: (_) => CreateAppointmentScreen(
+              repository: _repository,
+              availabilityRepository: _availabilityRepository,
+              customers: _customers,
+              services: _services,
+              liveLookups: _liveLookups,
+            ),
           ),
         );
+        if (saved == true && mounted) await _load();
       },
       icon: const Icon(Icons.add),
       label: const Text('Add Appointment'),
@@ -273,6 +365,30 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: LayoutBuilder(
         builder: (context, constraints) {
+          if (_loading) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 48),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          if (_error != null) {
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 36),
+              child: Column(
+                children: [
+                  Text(
+                    _error!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                ],
+              ),
+            );
+          }
+
           if (appointments.isEmpty) {
             return const Padding(
               padding: EdgeInsets.symmetric(horizontal: 20, vertical: 36),
@@ -346,17 +462,16 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         for (final appointment in appointments)
           DataRow(
             cells: [
-              DataCell(_cellText(
-                AppointmentCatalog.customer(appointment.customerId).fullName,
-                strong: true,
-              )),
-              DataCell(_cellText(
-                AppointmentCatalog.employee(appointment.employeeId).fullName,
-              )),
-              DataCell(_cellText(AppointmentCatalog.serviceSummary(appointment))),
+              DataCell(_cellText(_customerLabel(appointment), strong: true)),
+              DataCell(_cellText(_employeeLabel(appointment))),
+              DataCell(_cellText(_serviceLabel(appointment))),
               DataCell(_cellText(DateFormatter.format(appointment.appointmentDate))),
-              DataCell(_cellText(formatAppointmentTime(appointment.startTime))),
-              DataCell(_cellText(formatAppointmentTime(appointment.endTime))),
+              DataCell(_cellText(
+                appointment.hasScheduledTime ? formatAppointmentTime(appointment.startTime) : '—',
+              )),
+              DataCell(_cellText(
+                appointment.hasScheduledTime ? formatAppointmentTime(appointment.endTime) : '—',
+              )),
               DataCell(AppointmentStatusBadge(status: appointment.status)),
               DataCell(
                 PopupMenuButton<String>(
@@ -404,6 +519,69 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
       ),
       columnWidth: FlexColumnWidth(flex),
     );
+  }
+
+  String _customerLabel(Appointment appointment) {
+    final name = appointment.customerName;
+    if (name != null && name.isNotEmpty) return name;
+    if (_liveLookups) {
+      return _customerNames[appointment.customerId] ?? 'Customer ${appointment.customerId}';
+    }
+    try {
+      return AppointmentCatalog.customer(appointment.customerId).fullName;
+    } catch (_) {
+      return 'Customer ${appointment.customerId}';
+    }
+  }
+
+  String _employeeLabel(Appointment appointment) {
+    final storedName = appointment.employeeName;
+    final name = storedName != null && storedName.isNotEmpty
+        ? storedName
+        : appointment.employeeId <= 0
+            ? 'Unassigned'
+            : _knownEmployeeName(appointment.employeeId);
+    final state = _schedulingLabel(appointment.schedulingState);
+    if (state == null) return name;
+    return '$name · $state';
+  }
+
+  String _knownEmployeeName(int employeeId) {
+    if (_liveLookups) return 'Employee $employeeId';
+    try {
+      return AppointmentCatalog.employee(employeeId).fullName;
+    } catch (_) {
+      return 'Employee $employeeId';
+    }
+  }
+
+  String? _schedulingLabel(String? state) {
+    return switch (state) {
+      'Scheduled' => 'Scheduled',
+      'PartiallyScheduled' => 'Partial',
+      'Unscheduled' => 'Unscheduled',
+      _ => null,
+    };
+  }
+
+  String _serviceLabel(Appointment appointment) {
+    final names = appointment.appointmentServices
+        .map((line) => line.serviceName)
+        .whereType<String>()
+        .where((name) => name.isNotEmpty)
+        .toList();
+    if (names.isNotEmpty) return names.join(', ');
+    if (appointment.appointmentServices.isEmpty) return 'No services';
+    if (_liveLookups) {
+      return appointment.appointmentServices
+          .map((line) => _serviceNames[line.serviceId] ?? 'Service ${line.serviceId}')
+          .join(', ');
+    }
+    try {
+      return AppointmentCatalog.serviceSummary(appointment);
+    } catch (_) {
+      return appointment.appointmentServices.map((line) => 'Service ${line.serviceId}').join(', ');
+    }
   }
 
   Widget _cellText(String value, {bool strong = false}) {

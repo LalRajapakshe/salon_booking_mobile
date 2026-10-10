@@ -14,9 +14,13 @@ class AppointmentStatusBadge extends StatelessWidget {
   Widget build(BuildContext context) {
     final (Color background, Color foreground) = switch (status) {
       AppointmentStatus.scheduled => (const Color(0xFFE3F2FD), const Color(0xFF1565C0)),
+      AppointmentStatus.pending => (const Color(0xFFFFF8E1), const Color(0xFF8D6E00)),
       AppointmentStatus.confirmed => (const Color(0xFFF3E5F5), const Color(0xFF6A1B9A)),
+      AppointmentStatus.checkedIn => (const Color(0xFFE0F7FA), const Color(0xFF006064)),
+      AppointmentStatus.inProgress => (const Color(0xFFFFF3E0), const Color(0xFFE65100)),
       AppointmentStatus.completed => (const Color(0xFFE8F5E9), const Color(0xFF2E7D32)),
       AppointmentStatus.cancelled => (const Color(0xFFFFEBEE), const Color(0xFFC62828)),
+      AppointmentStatus.noShow => (const Color(0xFFECEFF1), const Color(0xFF455A64)),
     };
 
     return Container(

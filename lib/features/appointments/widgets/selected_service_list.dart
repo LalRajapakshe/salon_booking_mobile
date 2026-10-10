@@ -1,17 +1,48 @@
 import 'package:flutter/material.dart';
 
 import '../../../shared/utils/currency_formatter.dart';
-import '../models/appointment_service_line.dart';
+import '../models/appointment_service_draft.dart';
+import '../models/appointment_time.dart';
+import '../models/employee_availability.dart';
+import '../models/salon_lookups.dart';
 import '../services/appointment_catalog.dart';
 
+class ServiceLineAvailability {
+  final bool loading;
+  final bool loaded;
+  final String? error;
+  final List<EmployeeAvailability> options;
+
+  const ServiceLineAvailability({
+    this.loading = false,
+    this.loaded = false,
+    this.error,
+    this.options = const [],
+  });
+
+  bool get hasSlots => options.any((employee) => employee.slots.isNotEmpty);
+}
+
 class SelectedServiceList extends StatelessWidget {
-  final List<AppointmentServiceLine> lines;
+  final List<AppointmentServiceDraft> lines;
+  final Map<int, ServiceLineAvailability> availability;
+  final bool enabled;
   final ValueChanged<int> onRemove;
+  final ValueChanged<int> onFindAvailability;
+  final void Function(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) onSelectSlot;
+  final ValueChanged<int> onClearSchedule;
+  final ServiceLookup Function(int serviceId)? serviceLookup;
 
   const SelectedServiceList({
     super.key,
     required this.lines,
+    required this.availability,
+    required this.enabled,
     required this.onRemove,
+    required this.onFindAvailability,
+    required this.onSelectSlot,
+    required this.onClearSchedule,
+    this.serviceLookup,
   });
 
   @override
@@ -22,25 +53,65 @@ class SelectedServiceList extends StatelessWidget {
 
     return Column(
       children: [
-        for (final line in lines) ..._serviceRow(line),
+        for (final line in lines) ...[
+          const SizedBox(height: 12),
+          _ServiceCard(
+            line: line,
+            availability: availability[line.serviceId] ?? const ServiceLineAvailability(),
+            enabled: enabled,
+            onRemove: onRemove,
+            onFindAvailability: onFindAvailability,
+            onSelectSlot: onSelectSlot,
+            onClearSchedule: onClearSchedule,
+            serviceLookup: serviceLookup,
+          ),
+        ],
       ],
     );
   }
+}
 
-  List<Widget> _serviceRow(AppointmentServiceLine line) {
-    final service = AppointmentCatalog.service(line.serviceId);
-    return [
-      const SizedBox(height: 8),
-      Material(
-        color: const Color(0xffF7F8FC),
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 14, right: 4),
-          child: Row(
-            children: [
-              Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 10),
+class _ServiceCard extends StatelessWidget {
+  final AppointmentServiceDraft line;
+  final ServiceLineAvailability availability;
+  final bool enabled;
+  final ValueChanged<int> onRemove;
+  final ValueChanged<int> onFindAvailability;
+  final void Function(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) onSelectSlot;
+  final ValueChanged<int> onClearSchedule;
+  final ServiceLookup Function(int serviceId)? serviceLookup;
+
+  const _ServiceCard({
+    required this.line,
+    required this.availability,
+    required this.enabled,
+    required this.onRemove,
+    required this.onFindAvailability,
+    required this.onSelectSlot,
+    required this.onClearSchedule,
+    this.serviceLookup,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final service = serviceLookup?.call(line.serviceId) ?? AppointmentCatalog.service(line.serviceId);
+    final price = CurrencyFormatter.formatWithSymbol(service.price);
+    final schedule = line.hasSchedule
+        ? '${line.employeeName ?? 'Employee ${line.employeeId}'}   ${formatAppointmentTime(line.startTime!)} → ${formatAppointmentTime(line.endTime!)}'
+            '${line.scheduleSaved ? ' · Scheduled' : ''}'
+        : 'Unscheduled';
+
+    return Material(
+      color: const Color(0xffF7F8FC),
+      borderRadius: BorderRadius.circular(12),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 4, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -52,7 +123,7 @@ class SelectedServiceList extends StatelessWidget {
                       ),
                       const SizedBox(height: 2),
                       Text(
-                        '${service.durationMinutes} min · ${CurrencyFormatter.formatWithSymbol(service.price)}',
+                        'Duration: ${service.durationMinutes} min    Price: $price',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(color: Colors.grey, fontSize: 13),
@@ -60,16 +131,107 @@ class SelectedServiceList extends StatelessWidget {
                     ],
                   ),
                 ),
+                IconButton(
+                  tooltip: 'Remove ${service.serviceName}',
+                  onPressed: enabled ? () => onRemove(service.serviceId) : null,
+                  icon: const Icon(Icons.close),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(schedule, style: const TextStyle(fontSize: 13)),
+            if (line.hasSchedule)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  onPressed: enabled ? () => onClearSchedule(line.serviceId) : null,
+                  child: const Text('Clear time'),
+                ),
               ),
-              IconButton(
-                tooltip: 'Remove ${service.serviceName}',
-                onPressed: () => onRemove(service.serviceId),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
+            const SizedBox(height: 4),
+            _availabilityBody(context),
+          ],
         ),
       ),
-    ];
+    );
+  }
+
+  Widget _availabilityBody(BuildContext context) {
+    if (availability.loading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: Center(
+          child: SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Align(
+          alignment: Alignment.centerLeft,
+          child: OutlinedButton.icon(
+            onPressed: enabled ? () => onFindAvailability(line.serviceId) : null,
+            icon: const Icon(Icons.schedule),
+            label: Text(availability.error == null ? 'Find Availability' : 'Retry'),
+          ),
+        ),
+        if (availability.error != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            availability.error!,
+            style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 13),
+          ),
+        ],
+        if (availability.loaded && availability.error == null && !availability.hasSlots) ...[
+          const SizedBox(height: 8),
+          const Text(
+            'No available times for this service.',
+            style: TextStyle(color: Colors.grey, fontSize: 13),
+          ),
+        ],
+        for (final employee in availability.options)
+          if (employee.slots.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              '${employee.employeeName} · ${employee.durationMinutes} min',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 6),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final slot in employee.slots)
+                  _slotButton(employee, slot),
+              ],
+            ),
+          ],
+      ],
+    );
+  }
+
+  Widget _slotButton(EmployeeAvailability employee, AvailabilitySlot slot) {
+    final start = TimeOfDay.fromDateTime(slot.startTime);
+    final end = TimeOfDay.fromDateTime(slot.endTime);
+    final label = '${formatAppointmentTime(start)} → ${formatAppointmentTime(end)}';
+    final selected = line.employeeId == employee.employeeId &&
+        _sameTime(line.startTime, start) &&
+        _sameTime(line.endTime, end);
+    final onPressed = enabled ? () => onSelectSlot(line.serviceId, employee, slot) : null;
+
+    if (selected) {
+      return FilledButton(onPressed: onPressed, child: Text(label));
+    }
+    return OutlinedButton(onPressed: onPressed, child: Text(label));
+  }
+
+  bool _sameTime(TimeOfDay? left, TimeOfDay right) {
+    return left != null && left.hour == right.hour && left.minute == right.minute;
   }
 }

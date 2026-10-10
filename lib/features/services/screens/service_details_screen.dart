@@ -9,11 +9,13 @@ import 'create_service_screen.dart';
 class ServiceDetailsScreen extends StatefulWidget {
   final ServiceDirectory directory;
   final int serviceId;
+  final bool allowEdit;
 
   const ServiceDetailsScreen({
     super.key,
     required this.directory,
     required this.serviceId,
+    this.allowEdit = true,
   });
 
   @override
@@ -92,8 +94,10 @@ class _ServiceDetailsScreenState extends State<ServiceDetailsScreen> {
                       service: service,
                       branchName: branchNameForService(service.branchId),
                     ),
-                    const SizedBox(height: 20),
-                    _editButton(constraints.maxWidth),
+                    if (widget.allowEdit) ...[
+                      const SizedBox(height: 20),
+                      _editButton(constraints.maxWidth),
+                    ],
                   ],
                 ),
               ),

@@ -13,6 +13,15 @@ class AppointmentCatalog {
   static List<BranchLookup> get branches =>
       List<BranchLookup>.unmodifiable(mockBranches);
 
+  static List<CustomerLookup> get customers =>
+      List<CustomerLookup>.unmodifiable(mockCustomers);
+
+  static List<EmployeeLookup> get employees =>
+      List<EmployeeLookup>.unmodifiable(mockEmployees);
+
+  static List<ServiceLookup> get services =>
+      List<ServiceLookup>.unmodifiable(mockServices);
+
   static List<CustomerLookup> customersForBranch(int branchId) {
     return mockCustomers.where((item) => item.branchId == branchId).toList();
   }

@@ -93,6 +93,17 @@ class AppointmentScheduleCard extends StatelessWidget {
                                   color: Colors.grey,
                                 ),
                               ),
+                              if (block.notice != null)
+                                Text(
+                                  block.notice!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFFE53935),
+                                  ),
+                                ),
                               if (conflict)
                                 const Text(
                                   'Conflict',

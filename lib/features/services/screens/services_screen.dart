@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../data/service_directory.dart';
+import '../data/service_repository.dart';
 import '../models/service_management_models.dart';
 import '../widgets/service_filters.dart';
 import '../widgets/service_summary_card.dart';
@@ -14,8 +16,9 @@ import 'service_details_screen.dart';
 
 class ServicesScreen extends StatefulWidget {
   final ServiceDirectory? directory;
+  final ServiceRepository? services;
 
-  const ServicesScreen({super.key, this.directory});
+  const ServicesScreen({super.key, this.directory, this.services});
 
   @override
   State<ServicesScreen> createState() => _ServicesScreenState();
@@ -23,7 +26,11 @@ class ServicesScreen extends StatefulWidget {
 
 class _ServicesScreenState extends State<ServicesScreen> {
   late final ServiceDirectory _directory;
+  late final ServiceRepository _services;
   final TextEditingController _searchController = TextEditingController();
+  List<SalonService> _apiServices = [];
+  bool _loading = false;
+  String? _loadError;
 
   String _categoryFilter = 'All';
   String _statusFilter = 'All';
@@ -41,10 +48,52 @@ class _ServicesScreenState extends State<ServicesScreen> {
     'Created Date',
   ];
 
+  bool get _apiBacked => widget.directory == null && _services.isApiBacked;
+
+  List<SalonService> get _source => _apiBacked ? _apiServices : _directory.services;
+
+  double get _averagePrice {
+    if (_source.isEmpty) return 0;
+    final total = _source.fold<double>(0, (sum, service) => sum + service.price);
+    return total / _source.length;
+  }
+
   @override
   void initState() {
     super.initState();
     _directory = widget.directory ?? ServiceDirectory.session;
+    _services = widget.services ?? ServiceRepository();
+    if (_apiBacked) {
+      _loading = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _load();
+      });
+    }
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    try {
+      final services = await _services.list();
+      if (!mounted) return;
+      setState(() {
+        _apiServices = services;
+        _loading = false;
+        if (!_categoryOptions.contains(_categoryFilter)) {
+          _categoryFilter = 'All';
+        }
+        _clampPage();
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = error.message;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -54,13 +103,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
   }
 
   List<String> get _categoryOptions {
-    return ['All', ...serviceCategoryNames];
+    if (!_apiBacked) return ['All', ...serviceCategoryNames];
+    final names = _apiServices.map((service) => service.categoryName).toSet().toList()
+      ..sort();
+    return ['All', ...names];
   }
 
   List<SalonService> get _filteredServices {
     final query = _searchController.text.trim().toLowerCase();
 
-    final result = _directory.services.where((service) {
+    final result = _source.where((service) {
       final matchesSearch =
           query.isEmpty ||
           service.serviceName.toLowerCase().contains(query) ||
@@ -121,10 +173,19 @@ class _ServicesScreenState extends State<ServicesScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => CreateServiceScreen(directory: _directory),
+        builder: (_) => CreateServiceScreen(
+          directory: _directory,
+          persistToApi: _apiBacked,
+          services: _services,
+        ),
       ),
     );
-    if (mounted) setState(_resetPage);
+    if (!mounted) return;
+    if (_apiBacked) {
+      await _load();
+    } else {
+      setState(_resetPage);
+    }
   }
 
   Future<void> _openDetails(SalonService service) async {
@@ -132,8 +193,11 @@ class _ServicesScreenState extends State<ServicesScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => ServiceDetailsScreen(
-          directory: _directory,
+          directory: _apiBacked
+              ? ServiceDirectory(services: [service])
+              : _directory,
           serviceId: service.serviceId,
+          allowEdit: !_apiBacked,
         ),
       ),
     );
@@ -174,8 +238,16 @@ class _ServicesScreenState extends State<ServicesScreen> {
       case ServiceMenuAction.view:
         _openDetails(service);
       case ServiceMenuAction.edit:
+        if (_apiBacked) {
+          AppSnackBar.info(context, 'Service update is not connected yet.');
+          return;
+        }
         _openEdit(service);
       case ServiceMenuAction.delete:
+        if (_apiBacked) {
+          AppSnackBar.info(context, 'Service delete is not connected yet.');
+          return;
+        }
         _confirmDelete(service);
     }
   }
@@ -239,11 +311,32 @@ class _ServicesScreenState extends State<ServicesScreen> {
                   }),
                 ),
                 const SizedBox(height: 16),
-                ServiceTable(
-                  services: paged,
-                  compact: compact,
-                  onAction: _onAction,
-                ),
+                if (_apiBacked && _loading)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 48),
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                else if (_apiBacked && _loadError != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 36),
+                    child: Column(
+                      children: [
+                        Text(
+                          _loadError!,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                        const SizedBox(height: 12),
+                        OutlinedButton(onPressed: _load, child: const Text('Retry')),
+                      ],
+                    ),
+                  )
+                else
+                  ServiceTable(
+                    services: paged,
+                    compact: compact,
+                    onAction: _onAction,
+                  ),
                 const SizedBox(height: 16),
                 _buildPagination(
                   total: services.length,
@@ -302,25 +395,25 @@ class _ServicesScreenState extends State<ServicesScreen> {
     final cards = [
       ServiceSummaryCard(
         label: 'Total Services',
-        value: '${_directory.totalCount}',
+        value: '${_source.length}',
         icon: Icons.content_cut,
         color: AppColors.service,
       ),
       ServiceSummaryCard(
         label: 'Active Services',
-        value: '${_directory.activeCount}',
+        value: '${_source.where((service) => service.isActive).length}',
         icon: Icons.check_circle_outline,
         color: AppColors.success,
       ),
       ServiceSummaryCard(
         label: 'Categories',
-        value: '${_directory.categoryCount}',
+        value: '${_source.map((service) => service.categoryName).toSet().length}',
         icon: Icons.category_outlined,
         color: AppColors.primary,
       ),
       ServiceSummaryCard(
         label: 'Average Price',
-        value: CurrencyFormatter.formatWithSymbol(_directory.averagePrice),
+        value: CurrencyFormatter.formatWithSymbol(_averagePrice),
         icon: Icons.payments_outlined,
         color: AppColors.secondary,
       ),

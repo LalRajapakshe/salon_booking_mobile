@@ -1,21 +1,41 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../shared/utils/currency_formatter.dart';
 import '../../../shared/widgets/app_dropdown.dart';
 import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
-import '../models/appointment.dart';
+import '../../customers/data/customer_repository.dart';
+import '../../services/data/service_repository.dart';
+import '../data/appointment_repository.dart';
+import '../data/availability_repository.dart';
+import '../models/appointment_service_draft.dart';
 import '../models/appointment_service_line.dart';
 import '../models/appointment_status.dart';
-import '../models/appointment_time.dart';
+import '../models/employee_availability.dart';
 import '../models/salon_lookups.dart';
 import '../services/appointment_catalog.dart';
 import '../widgets/appointment_date_field.dart';
 import '../widgets/selected_service_list.dart';
 
 class CreateAppointmentScreen extends StatefulWidget {
-  const CreateAppointmentScreen({super.key});
+  const CreateAppointmentScreen({
+    super.key,
+    this.repository,
+    this.availabilityRepository,
+    this.customers,
+    this.services,
+    this.liveLookups = false,
+  });
+
+  final AppointmentRepository? repository;
+  final AvailabilityRepository? availabilityRepository;
+  final CustomerRepository? customers;
+  final ServiceRepository? services;
+
+  /// Uses customers and services stored for the signed-in branch.
+  final bool liveLookups;
 
   @override
   State<CreateAppointmentScreen> createState() => _CreateAppointmentScreenState();
@@ -25,20 +45,89 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
 
-  int? _branchId;
   int? _customerId;
-  int? _employeeId;
   DateTime? _appointmentDate;
-  TimeOfDay? _startTime;
-  TimeOfDay? _endTime;
   AppointmentStatus _status = AppointmentStatus.scheduled;
   int? _serviceToAdd;
-  final List<AppointmentServiceLine> _services = [];
+  final List<AppointmentServiceDraft> _services = [];
   String? _serviceError;
+  String? _saveError;
   bool _validateOnInteraction = false;
+  bool _saving = false;
+  int? _createdAppointmentId;
+  final Map<int, ServiceLineAvailability> _availability = {};
+  late final AppointmentRepository _repository = widget.repository ?? AppointmentRepository();
+  late final AvailabilityRepository _availabilityRepository =
+      widget.availabilityRepository ?? AvailabilityRepository();
+  late final CustomerRepository _customersRepo = widget.customers ?? CustomerRepository();
+  late final ServiceRepository _servicesRepo = widget.services ?? ServiceRepository();
+  List<CustomerLookup> _apiCustomers = const [];
+  List<ServiceLookup> _apiServices = const [];
+  bool _loadingLookups = false;
+  String? _lookupError;
+
+  bool get _structureLocked => _saving || _createdAppointmentId != null;
 
   static const double _formMaxWidth = 1040;
   static const double _twoColumnBreakpoint = 640;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.liveLookups) {
+      _loadingLookups = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadLookups();
+      });
+    }
+  }
+
+  Future<void> _loadLookups() async {
+    setState(() {
+      _loadingLookups = true;
+      _lookupError = null;
+    });
+    try {
+      final customers = await _customersRepo.list();
+      final services = await _servicesRepo.list();
+      if (!mounted) return;
+      setState(() {
+        _apiCustomers = [
+          for (final customer in customers)
+            CustomerLookup(
+              customerId: customer.id,
+              customerCode: customer.customerCode,
+              firstName: customer.firstName,
+              lastName: customer.lastName,
+              mobileNo: customer.mobileNumber,
+              branchId: 0,
+            ),
+        ];
+        _apiServices = [
+          for (final service in services)
+            ServiceLookup(
+              serviceId: service.serviceId,
+              serviceCode: service.serviceCode,
+              serviceName: service.serviceName,
+              durationMinutes: service.durationMinutes,
+              price: service.price,
+              branchId: service.branchId,
+            ),
+        ];
+        _loadingLookups = false;
+        if (_customerId != null &&
+            !_apiCustomers.any((item) => item.customerId == _customerId)) {
+          _customerId = null;
+        }
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingLookups = false;
+        _lookupError = error.message;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -46,74 +135,226 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
     super.dispose();
   }
 
-  List<CustomerLookup> get _customers {
-    final branchId = _branchId;
-    if (branchId == null) return const [];
-    return AppointmentCatalog.customersForBranch(branchId);
-  }
+  List<CustomerLookup> get _customers =>
+      widget.liveLookups ? _apiCustomers : AppointmentCatalog.customers;
 
-  List<EmployeeLookup> get _employees {
-    final branchId = _branchId;
-    if (branchId == null) return const [];
-    return AppointmentCatalog.employeesForBranch(branchId);
-  }
+  List<ServiceLookup> get _serviceChoices =>
+      widget.liveLookups ? _apiServices : AppointmentCatalog.services;
 
   List<ServiceLookup> get _availableServices {
-    final branchId = _branchId;
-    if (branchId == null) return const [];
     final selected = _services.map((line) => line.serviceId).toSet();
-    return AppointmentCatalog.servicesForBranch(branchId)
-        .where((service) => !selected.contains(service.serviceId))
-        .toList();
+    return _serviceChoices.where((service) => !selected.contains(service.serviceId)).toList();
+  }
+
+  ServiceLookup _serviceById(int serviceId) {
+    for (final service in _serviceChoices) {
+      if (service.serviceId == serviceId) return service;
+    }
+    return ServiceLookup(
+      serviceId: serviceId,
+      serviceCode: '',
+      serviceName: 'Service $serviceId',
+      durationMinutes: 0,
+      price: 0,
+      branchId: 0,
+    );
   }
 
   void _cancel() {
     Navigator.of(context).pop();
   }
 
-  void _onBranchChanged(int? value) {
-    setState(() {
-      _branchId = value;
-      _customerId = null;
-      _employeeId = null;
-      _serviceToAdd = null;
-      _services.clear();
-      _serviceError = null;
-    });
-  }
-
   void _addService() {
+    if (_structureLocked) return;
     final serviceId = _serviceToAdd;
     if (serviceId == null) return;
     if (_services.any((line) => line.serviceId == serviceId)) return;
 
     setState(() {
-      _services.add(
-        AppointmentServiceLine(
-          appointmentServiceId: 0,
-          appointmentId: 0,
-          serviceId: serviceId,
-        ),
-      );
+      _services.add(AppointmentServiceDraft(serviceId: serviceId));
       _serviceToAdd = null;
       _serviceError = null;
     });
   }
 
   void _removeService(int serviceId) {
+    if (_structureLocked) return;
     setState(() {
       _services.removeWhere((line) => line.serviceId == serviceId);
+      _availability.remove(serviceId);
     });
   }
 
-  void _save() {
+  Future<void> _findAvailability(int serviceId) async {
+    final date = _appointmentDate;
+    if (date == null) {
+      setState(() {
+        _availability[serviceId] = const ServiceLineAvailability(
+          error: 'Appointment date is required',
+        );
+      });
+      return;
+    }
+
+    if (!_availabilityRepository.isApiBacked) {
+      setState(() {
+        _availability[serviceId] = const ServiceLineAvailability(
+          error: 'Sign in is required.',
+        );
+      });
+      return;
+    }
+
+    setState(() {
+      _availability[serviceId] = const ServiceLineAvailability(loading: true);
+    });
+
+    try {
+      final options = await _availabilityRepository.find(serviceId: serviceId, date: date);
+      if (!mounted) return;
+      setState(() {
+        _availability[serviceId] = ServiceLineAvailability(loaded: true, options: options);
+      });
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _availability[serviceId] = ServiceLineAvailability(error: error.message);
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _availability[serviceId] = const ServiceLineAvailability(
+          error: 'Availability could not be loaded.',
+        );
+      });
+    }
+  }
+
+  void _selectSlot(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) {
+    _updateService(
+      serviceId,
+      (line) => line.copyWith(
+        employeeId: employee.employeeId,
+        employeeName: employee.employeeName,
+        startTime: TimeOfDay.fromDateTime(slot.startTime),
+        endTime: TimeOfDay.fromDateTime(slot.endTime),
+        scheduleSaved: false,
+      ),
+    );
+  }
+
+  void _clearSchedule(int serviceId) {
+    _updateService(
+      serviceId,
+      (line) => line.copyWith(
+        employeeId: null,
+        employeeName: null,
+        startTime: null,
+        endTime: null,
+      ),
+    );
+  }
+
+  void _updateService(int serviceId, AppointmentServiceDraft Function(AppointmentServiceDraft line) update) {
+    if (_saving) return;
+    setState(() {
+      final index = _services.indexWhere((line) => line.serviceId == serviceId);
+      if (index < 0) return;
+      _services[index] = update(_services[index]);
+    });
+    _revalidateIfNeeded();
+  }
+
+  Future<void> _scheduleLine(int index) async {
+    final line = _services[index];
+    final rowVersion = line.rowVersion;
+    final lineId = line.appointmentServiceId;
+    final employeeId = line.employeeId;
+    final start = line.startTime;
+    final end = line.endTime;
+    final date = _appointmentDate;
+    if (lineId == null ||
+        rowVersion == null ||
+        rowVersion.isEmpty ||
+        employeeId == null ||
+        start == null ||
+        end == null ||
+        date == null) {
+      throw ApiException('${_serviceName(line.serviceId)} is missing its row version.');
+    }
+
+    try {
+      final scheduled = await _repository.scheduleLine(
+        appointmentId: _createdAppointmentId!,
+        appointmentServiceId: lineId,
+        employeeId: employeeId,
+        startTime: DateTime(date.year, date.month, date.day, start.hour, start.minute),
+        endTime: DateTime(date.year, date.month, date.day, end.hour, end.minute),
+        rowVersion: rowVersion,
+      );
+      _services[index] = line.copyWith(
+        rowVersion: scheduled.rowVersion,
+        durationMinutes: scheduled.durationMinutes,
+        unitPrice: scheduled.unitPrice,
+        scheduleSaved: true,
+      );
+    } on ApiException catch (error) {
+      if (_isConcurrency(error)) {
+        await _refreshLineVersion(index);
+      }
+      throw ApiException('${_serviceName(line.serviceId)}: ${error.message}', statusCode: error.statusCode);
+    }
+  }
+
+  Future<void> _refreshLineVersion(int index) async {
+    final appointmentId = _createdAppointmentId;
+    final line = _services[index];
+    final lineId = line.appointmentServiceId;
+    if (appointmentId == null || lineId == null) return;
+    try {
+      final appointment = await _repository.get(appointmentId);
+      AppointmentServiceLine? serverLine;
+      for (final item in appointment.appointmentServices) {
+        if (item.appointmentServiceId == lineId) {
+          serverLine = item;
+          break;
+        }
+      }
+      final version = serverLine?.rowVersion;
+      if (version == null || version.isEmpty) return;
+      _services[index] = _services[index].copyWith(
+        rowVersion: version,
+        durationMinutes: serverLine?.durationMinutes,
+        unitPrice: serverLine?.unitPrice,
+        scheduleSaved: serverLine?.isFullyScheduled ?? false,
+      );
+    } on ApiException {
+      return;
+    }
+  }
+
+  bool _isConcurrency(ApiException error) {
+    return error.statusCode == 409 && error.message.contains('changed by someone else');
+  }
+
+  String _serviceName(int serviceId) {
+    if (widget.liveLookups) return _serviceById(serviceId).serviceName;
+    try {
+      return AppointmentCatalog.service(serviceId).serviceName;
+    } catch (_) {
+      return 'Service $serviceId';
+    }
+  }
+
+  Future<void> _save() async {
     final form = _formKey.currentState;
-    final servicesMissing = _services.isEmpty;
+    final servicesMissing = _createdAppointmentId == null && _services.isEmpty;
     setState(() {
       _serviceError = servicesMissing ? 'Service is required' : null;
     });
 
-    if (form == null || !form.validate() || servicesMissing) {
+    if (_createdAppointmentId == null &&
+        (form == null || !form.validate() || servicesMissing)) {
       setState(() => _validateOnInteraction = true);
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -125,21 +366,96 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
       return;
     }
 
-    final appointment = Appointment(
-      appointmentId: 0,
-      branchId: _branchId!,
-      customerId: _customerId!,
-      appointmentDate: _appointmentDate!,
-      startTime: _startTime!,
-      endTime: _endTime!,
-      employeeId: _employeeId!,
-      status: _status,
-      appointmentServices: List<AppointmentServiceLine>.unmodifiable(_services),
-    );
+    if (widget.liveLookups && (_loadingLookups || _lookupError != null)) return;
 
-    final customer = AppointmentCatalog.customer(appointment.customerId);
-    AppSnackBar.success(context, '${customer.fullName} was saved.');
-    Navigator.of(context).pop();
+    if (!_repository.isApiBacked) {
+      final customer = AppointmentCatalog.customer(_customerId!);
+      AppSnackBar.success(context, '${customer.fullName} was saved.');
+      Navigator.of(context).pop();
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+      _saveError = null;
+    });
+
+    var phase = 'create';
+    try {
+      if (_createdAppointmentId == null) {
+        final created = await _repository.create(
+          customerId: _customerId!,
+          appointmentDate: _appointmentDate!,
+          status: _status,
+        );
+        _createdAppointmentId = created.appointmentId;
+      }
+
+      phase = 'lines';
+      for (var index = 0; index < _services.length; index++) {
+        final line = _services[index];
+        if (line.appointmentServiceId != null) continue;
+        final createdLine = await _repository.addService(
+          appointmentId: _createdAppointmentId!,
+          serviceId: line.serviceId,
+        );
+        _services[index] = line.copyWith(
+          appointmentServiceId: createdLine.appointmentServiceId,
+          rowVersion: createdLine.rowVersion,
+          durationMinutes: createdLine.durationMinutes,
+          unitPrice: createdLine.unitPrice,
+        );
+      }
+
+      phase = 'schedule';
+      for (var index = 0; index < _services.length; index++) {
+        final line = _services[index];
+        if (!line.hasSchedule || line.scheduleSaved) continue;
+        await _scheduleLine(index);
+      }
+
+      phase = 'refresh';
+      if (_services.any((line) => line.scheduleSaved)) {
+        await _repository.get(_createdAppointmentId!);
+      }
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      final created = _createdAppointmentId != null;
+      setState(() {
+        _saving = false;
+        _saveError = switch (phase) {
+          'schedule' => '${error.message} Save again to retry the service that was not scheduled.',
+          'refresh' => '${error.message} Save again to reload the appointment.',
+          _ when created =>
+            '${error.message} The appointment was created. Save again to add the remaining services.',
+          _ => error.message,
+        };
+      });
+      return;
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _saving = false;
+        _saveError = 'The appointment could not be saved.';
+      });
+      return;
+    }
+
+    if (!mounted) return;
+    AppSnackBar.success(context, '${_customerName(_customerId!)} was saved.');
+    Navigator.of(context).pop(true);
+  }
+
+  String _customerName(int customerId) {
+    for (final customer in _customers) {
+      if (customer.customerId == customerId) return customer.fullName;
+    }
+    if (widget.liveLookups) return 'Customer $customerId';
+    try {
+      return AppointmentCatalog.customer(customerId).fullName;
+    } catch (_) {
+      return 'Customer $customerId';
+    }
   }
 
   String? _requiredSelection(Object? value, String label) {
@@ -150,15 +466,6 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   String? _dateValidator(String? value) {
     if (value == null || value.trim().isEmpty) {
       return 'Appointment date is required';
-    }
-    return null;
-  }
-
-  String? _endTimeValidator(TimeOfDay? value) {
-    if (value == null) return 'End time is required';
-    final start = _startTime;
-    if (start != null && appointmentMinutes(value) <= appointmentMinutes(start)) {
-      return 'End time must be after start time';
     }
     return null;
   }
@@ -185,6 +492,21 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         builder: (context, constraints) {
           final padding = constraints.maxWidth < 520 ? 16.0 : 24.0;
 
+          if (widget.liveLookups && _loadingLookups) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (widget.liveLookups && _lookupError != null) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(_lookupError!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  OutlinedButton(onPressed: _loadLookups, child: const Text('Retry')),
+                ],
+              ),
+            );
+          }
           return SingleChildScrollView(
             controller: _scrollController,
             padding: EdgeInsets.all(padding),
@@ -226,7 +548,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         ),
         SizedBox(height: 6),
         Text(
-          'Record the booking, then add the services it includes',
+          'Record the customer and date, then add each service',
           style: TextStyle(color: Colors.grey, fontSize: 14),
         ),
       ],
@@ -266,37 +588,21 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final twoColumns = constraints.maxWidth >= _twoColumnBreakpoint;
-          final branchReady = _branchId != null;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _sectionHeading(
-                'Appointment',
-                'Branch, customer, employee, date, times, and status',
+                'Appointment Details',
+                'Customer, date, and status',
               ),
               const SizedBox(height: 16),
               _pair(
                 twoColumns: twoColumns,
                 first: AppDropdown<int>(
-                  labelText: 'Branch',
-                  hintText: 'Select branch',
-                  value: _branchId,
-                  items: [
-                    for (final branch in AppointmentCatalog.branches)
-                      DropdownMenuItem<int>(
-                        value: branch.branchId,
-                        child: Text(branch.label, overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
-                  onChanged: _onBranchChanged,
-                  validator: (value) => _requiredSelection(value, 'Branch'),
-                ),
-                second: AppDropdown<int>(
                   labelText: 'Customer',
-                  hintText: branchReady ? 'Select customer' : 'Select a branch first',
+                  hintText: 'Select customer',
                   value: _customerId,
-                  enabled: branchReady,
                   items: [
                     for (final customer in _customers)
                       DropdownMenuItem<int>(
@@ -304,27 +610,11 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                         child: Text(customer.label, overflow: TextOverflow.ellipsis),
                       ),
                   ],
-                  onChanged: (value) => setState(() => _customerId = value),
+                  onChanged: (value) {
+                    if (_structureLocked) return;
+                    setState(() => _customerId = value);
+                  },
                   validator: (value) => _requiredSelection(value, 'Customer'),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _pair(
-                twoColumns: twoColumns,
-                first: AppDropdown<int>(
-                  labelText: 'Employee',
-                  hintText: branchReady ? 'Select employee' : 'Select a branch first',
-                  value: _employeeId,
-                  enabled: branchReady,
-                  items: [
-                    for (final employee in _employees)
-                      DropdownMenuItem<int>(
-                        value: employee.employeeId,
-                        child: Text(employee.label, overflow: TextOverflow.ellipsis),
-                      ),
-                  ],
-                  onChanged: (value) => setState(() => _employeeId = value),
-                  validator: (value) => _requiredSelection(value, 'Employee'),
                 ),
                 second: AppDropdown<AppointmentStatus>(
                   labelText: 'Status',
@@ -337,36 +627,30 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                       ),
                   ],
                   onChanged: (value) {
-                    if (value != null) setState(() => _status = value);
+                    if (_structureLocked || value == null) return;
+                    setState(() => _status = value);
                   },
                 ),
               ),
               const SizedBox(height: 16),
               AppointmentDateField(
                 value: _appointmentDate,
-                onChanged: (date) => setState(() => _appointmentDate = date),
+                onChanged: (date) {
+                  if (_structureLocked) return;
+                  setState(() {
+                    _appointmentDate = date;
+                    _availability.clear();
+                    for (var index = 0; index < _services.length; index++) {
+                      _services[index] = _services[index].copyWith(
+                        employeeId: null,
+                        employeeName: null,
+                        startTime: null,
+                        endTime: null,
+                      );
+                    }
+                  });
+                },
                 validator: _dateValidator,
-              ),
-              const SizedBox(height: 16),
-              _pair(
-                twoColumns: twoColumns,
-                first: _timeDropdown(
-                  label: 'Start Time',
-                  hint: 'Select start time',
-                  value: _startTime,
-                  onChanged: (value) {
-                    setState(() => _startTime = value);
-                    _revalidateIfNeeded();
-                  },
-                  validator: (value) => _requiredSelection(value, 'Start time'),
-                ),
-                second: _timeDropdown(
-                  label: 'End Time',
-                  hint: 'Select end time',
-                  value: _endTime,
-                  onChanged: (value) => setState(() => _endTime = value),
-                  validator: _endTimeValidator,
-                ),
               ),
             ],
           );
@@ -380,12 +664,11 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
       child: LayoutBuilder(
         builder: (context, constraints) {
           final twoColumns = constraints.maxWidth >= _twoColumnBreakpoint;
-          final branchReady = _branchId != null;
 
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              _buildServices(twoColumns, branchReady),
+              _buildServices(twoColumns),
               const SizedBox(height: 8),
               _buildActions(constraints.maxWidth),
             ],
@@ -395,41 +678,18 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
     );
   }
 
-  Widget _timeDropdown({
-    required String label,
-    required String hint,
-    required TimeOfDay? value,
-    required ValueChanged<TimeOfDay?> onChanged,
-    required FormFieldValidator<TimeOfDay> validator,
-  }) {
-    return AppDropdown<TimeOfDay>(
-      labelText: label,
-      hintText: hint,
-      value: value,
-      items: [
-        for (final time in appointmentTimeOptions())
-          DropdownMenuItem<TimeOfDay>(
-            value: time,
-            child: Text(formatAppointmentTime(time)),
-          ),
-      ],
-      onChanged: onChanged,
-      validator: validator,
-    );
-  }
-
-  Widget _buildServices(bool twoColumns, bool branchReady) {
+  Widget _buildServices(bool twoColumns) {
     final addButton = OutlinedButton.icon(
-      onPressed: _serviceToAdd == null ? null : _addService,
+      onPressed: _structureLocked || _serviceToAdd == null ? null : _addService,
       icon: const Icon(Icons.add),
       label: const Text('Add'),
     );
 
     final serviceDropdown = AppDropdown<int>(
       labelText: 'Service',
-      hintText: branchReady ? 'Select service' : 'Select a branch first',
+      hintText: 'Select service',
       value: _serviceToAdd,
-      enabled: branchReady && _availableServices.isNotEmpty,
+      enabled: _availableServices.isNotEmpty,
       items: [
         for (final service in _availableServices)
           DropdownMenuItem<int>(
@@ -440,15 +700,18 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
             ),
           ),
       ],
-      onChanged: (value) => setState(() => _serviceToAdd = value),
+      onChanged: (value) {
+        if (_structureLocked) return;
+        setState(() => _serviceToAdd = value);
+      },
     );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _sectionHeading(
-          'Appointment Services',
-          'Add every service included in this appointment',
+          'Services',
+          'Each service has its own stylist, duration, and time',
         ),
         const SizedBox(height: 12),
         if (twoColumns)
@@ -474,7 +737,13 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
           ),
         SelectedServiceList(
           lines: _services,
+          availability: _availability,
+          enabled: !_saving,
           onRemove: _removeService,
+          onFindAvailability: _findAvailability,
+          onSelectSlot: _selectSlot,
+          onClearSchedule: _clearSchedule,
+          serviceLookup: widget.liveLookups ? _serviceById : null,
         ),
         if (_serviceError != null) ...[
           const SizedBox(height: 8),
@@ -483,6 +752,16 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
             style: TextStyle(
               color: Theme.of(context).colorScheme.error,
               fontSize: 12,
+            ),
+          ),
+        ],
+        if (_saveError != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _saveError!,
+            style: TextStyle(
+              color: Theme.of(context).colorScheme.error,
+              fontSize: 13,
             ),
           ),
         ],
@@ -521,13 +800,14 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
       text: 'Cancel',
       icon: Icons.close,
       width: maxWidth < 520 ? double.infinity : 160,
-      onPressed: _cancel,
+      onPressed: _saving ? null : _cancel,
     );
     final save = AppPrimaryButton(
       text: 'Save',
       icon: Icons.check,
       width: maxWidth < 520 ? double.infinity : 160,
-      onPressed: _save,
+      isLoading: _saving,
+      onPressed: _saving ? null : _save,
     );
 
     if (maxWidth < 520) {

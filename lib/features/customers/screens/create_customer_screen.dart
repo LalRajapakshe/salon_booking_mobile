@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/api/api_exception.dart';
 import '../../../shared/utils/app_constants.dart';
 import '../../../shared/utils/validators.dart';
 import '../../../shared/widgets/app_date_picker.dart';
@@ -8,10 +9,13 @@ import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/app_text_field.dart';
+import '../data/customer_repository.dart';
 import '../models/customer_model.dart';
 
 class CreateCustomerScreen extends StatefulWidget {
-  const CreateCustomerScreen({super.key});
+  final CustomerRepository? repository;
+
+  const CreateCustomerScreen({super.key, this.repository});
 
   @override
   State<CreateCustomerScreen> createState() => _CreateCustomerScreenState();
@@ -33,12 +37,23 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
   DateTime? _dateOfBirth;
   bool _isActive = true;
   bool _validateOnInteraction = false;
+  bool _saving = false;
+  String? _saveError;
+  late final CustomerRepository _repository;
+
+  bool get _apiBacked => _repository.isApiBacked;
 
   /// Gender values already stored on existing customer records.
   static const List<String> _genderOptions = ['Female', 'Male'];
 
   static const double _formMaxWidth = 840;
   static const double _twoColumnBreakpoint = 640;
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = widget.repository ?? CustomerRepository();
+  }
 
   @override
   void dispose() {
@@ -57,7 +72,7 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     Navigator.of(context).pop();
   }
 
-  void _save() {
+  Future<void> _save() async {
     final form = _formKey.currentState;
     if (form == null || !form.validate()) {
       setState(() => _validateOnInteraction = true);
@@ -71,8 +86,35 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
       return;
     }
 
-    // id and createdDate are required by Customer but are not entered
-    // on this form. They are assigned locally until persistence exists.
+    if (_apiBacked) {
+      setState(() {
+        _saving = true;
+        _saveError = null;
+      });
+      try {
+        final created = await _repository.create(
+          firstName: _firstNameController.text,
+          lastName: _lastNameController.text,
+          mobileNo: _mobileNumberController.text,
+          email: _emptyToNull(_emailController.text),
+          gender: _gender,
+          dateOfBirth: _dateOfBirth,
+          remarks: _emptyToNull(_notesController.text),
+        );
+        if (!mounted) return;
+        AppSnackBar.success(context, '${created.fullName} was saved.');
+        Navigator.of(context).pop(true);
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _saving = false;
+          _saveError = error.message;
+        });
+      }
+      return;
+    }
+
+    // Signed-out save stays on this device. The server assigns id and code.
     final customer = Customer(
       id: 0,
       customerCode: _customerCodeController.text.trim(),
@@ -194,15 +236,17 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                AppTextField(
-                  controller: _customerCodeController,
-                  labelText: 'Customer Code',
-                  hintText: 'Enter customer code',
-                  prefixIcon: Icons.badge_outlined,
-                  textInputAction: TextInputAction.next,
-                  validator: (value) => _requiredText(value, 'Customer code'),
-                ),
-                const SizedBox(height: 16),
+                if (!_apiBacked) ...[
+                  AppTextField(
+                    controller: _customerCodeController,
+                    labelText: 'Customer Code',
+                    hintText: 'Enter customer code',
+                    prefixIcon: Icons.badge_outlined,
+                    textInputAction: TextInputAction.next,
+                    validator: (value) => _requiredText(value, 'Customer code'),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 _pair(
                   twoColumns: twoColumns,
                   first: AppTextField(
@@ -271,17 +315,19 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                     },
                   ),
                 ),
-                const SizedBox(height: 16),
-                AppTextField(
-                  controller: _addressController,
-                  labelText: 'Address',
-                  hintText: 'Enter address',
-                  prefixIcon: Icons.location_on_outlined,
-                  keyboardType: TextInputType.multiline,
-                  textInputAction: TextInputAction.newline,
-                  maxLines: 3,
-                  validator: _optionalLongText,
-                ),
+                if (!_apiBacked) ...[
+                  const SizedBox(height: 16),
+                  AppTextField(
+                    controller: _addressController,
+                    labelText: 'Address',
+                    hintText: 'Enter address',
+                    prefixIcon: Icons.location_on_outlined,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
+                    maxLines: 3,
+                    validator: _optionalLongText,
+                  ),
+                ],
                 const SizedBox(height: 16),
                 AppTextField(
                   controller: _notesController,
@@ -297,10 +343,23 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                 SwitchListTile(
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Active'),
-                  subtitle: const Text('Customer is active'),
-                  value: _isActive,
-                  onChanged: (value) => setState(() => _isActive = value),
+                  subtitle: Text(
+                    _apiBacked
+                        ? 'A new customer is saved as active'
+                        : 'Customer is active',
+                  ),
+                  value: _apiBacked ? true : _isActive,
+                  onChanged: _apiBacked
+                      ? null
+                      : (value) => setState(() => _isActive = value),
                 ),
+                if (_saveError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _saveError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
                 const SizedBox(height: 8),
                 _buildActions(constraints.maxWidth),
               ],
@@ -342,13 +401,14 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
       text: 'Cancel',
       icon: Icons.close,
       width: maxWidth < 520 ? double.infinity : 160,
-      onPressed: _cancel,
+      onPressed: _saving ? null : _cancel,
     );
     final save = AppPrimaryButton(
       text: 'Save',
       icon: Icons.check,
       width: maxWidth < 520 ? double.infinity : 160,
-      onPressed: _save,
+      isLoading: _saving,
+      onPressed: _saving ? null : _save,
     );
 
     if (maxWidth < 520) {

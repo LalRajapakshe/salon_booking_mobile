@@ -1,17 +1,36 @@
-/// One service line on an appointment.
-///
-/// The backend has no `AppointmentService` entity. This line keeps only
-/// the identifiers for that relationship. Employee, start time, and end
-/// time belong to the appointment, not to this line. Duration and price
-/// are read from the existing `Service` entity when the row is shown.
+/// One service line. Employee, start, end, duration, and price come from
+/// the appointment-service API. [serviceName] is filled only when a lookup
+/// already knows it.
 class AppointmentServiceLine {
   final int appointmentServiceId;
   final int appointmentId;
   final int serviceId;
+  final int? employeeId;
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final int? durationMinutes;
+  final double? unitPrice;
+  final int? sequence;
+  final String? notes;
+  final bool isCancelled;
+  final bool isFullyScheduled;
+  final String? rowVersion;
+  final String? serviceName;
 
   const AppointmentServiceLine({
     required this.appointmentServiceId,
     required this.appointmentId,
     required this.serviceId,
+    this.employeeId,
+    this.startTime,
+    this.endTime,
+    this.durationMinutes,
+    this.unitPrice,
+    this.sequence,
+    this.notes,
+    this.isCancelled = false,
+    this.isFullyScheduled = false,
+    this.rowVersion,
+    this.serviceName,
   });
 }

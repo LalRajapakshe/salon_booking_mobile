@@ -28,6 +28,7 @@ class SalonService {
   final int durationMinutes;
   final double price;
   final int branchId;
+  final int serviceCategoryId;
   final String categoryName;
   final String description;
   final bool isActive;
@@ -40,6 +41,7 @@ class SalonService {
     required this.durationMinutes,
     required this.price,
     required this.branchId,
+    this.serviceCategoryId = 0,
     required this.categoryName,
     required this.description,
     required this.isActive,
@@ -71,6 +73,7 @@ class SalonService {
     int? durationMinutes,
     double? price,
     int? branchId,
+    int? serviceCategoryId,
     String? categoryName,
     String? description,
     bool? isActive,
@@ -83,6 +86,7 @@ class SalonService {
       durationMinutes: durationMinutes ?? this.durationMinutes,
       price: price ?? this.price,
       branchId: branchId ?? this.branchId,
+      serviceCategoryId: serviceCategoryId ?? this.serviceCategoryId,
       categoryName: categoryName ?? this.categoryName,
       description: description ?? this.description,
       isActive: isActive ?? this.isActive,
