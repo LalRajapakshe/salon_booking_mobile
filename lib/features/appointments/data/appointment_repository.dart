@@ -69,10 +69,16 @@ class AppointmentRepository {
     required int appointmentId,
     required int serviceId,
     String? notes,
+    DateTime? preferredStartTime,
+    DateTime? preferredEndTime,
   }) async {
     final body = <String, dynamic>{'serviceId': serviceId};
     final trimmedNotes = notes?.trim();
     if (trimmedNotes != null && trimmedNotes.isNotEmpty) body['notes'] = trimmedNotes;
+    if (preferredStartTime != null && preferredEndTime != null) {
+      body['preferredStartTime'] = _timestamp(preferredStartTime);
+      body['preferredEndTime'] = _timestamp(preferredEndTime);
+    }
     return AppointmentApiMapper.serviceLine(
       await _client.postJson('/api/Appointments/$appointmentId/services', body),
     );
@@ -112,6 +118,27 @@ class AppointmentRepository {
       throw const ApiException('The server returned an unexpected response.');
     }
     return scheduled;
+  }
+
+  /// `POST /api/Appointments/{id}/status`. This stores the status only.
+  /// There is no arrival-time column on the appointment.
+  Future<Appointment> changeStatus({
+    required int appointmentId,
+    required AppointmentStatus status,
+  }) async {
+    final statusName = status.apiValue;
+    if (statusName == null) {
+      throw const ApiException('That status cannot be saved.');
+    }
+    final updated = AppointmentApiMapper.appointment(
+      await _client.postJson('/api/Appointments/$appointmentId/status', {
+        'status': statusName,
+      }),
+    );
+    if (updated.appointmentId <= 0) {
+      throw const ApiException('The server returned an unexpected response.');
+    }
+    return updated;
   }
 
   static String _timestamp(DateTime value) {

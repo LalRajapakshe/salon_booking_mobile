@@ -34,6 +34,7 @@ class CustomerApiMapper {
       gender: _text(json['gender']),
       dateOfBirth: _date(json['dateOfBirth']),
       notes: _text(json['remarks']),
+      photoPath: _text(json['photoPath']),
       isActive: json['isActive'] == true,
       createdDate: created,
     );

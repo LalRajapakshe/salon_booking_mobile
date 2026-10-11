@@ -9,6 +9,7 @@ class Customer {
   final DateTime? dateOfBirth;
   final String? address;
   final String? notes;
+  final String? photoPath;
   final bool isActive;
   final DateTime createdDate;
 
@@ -23,12 +24,15 @@ class Customer {
     this.dateOfBirth,
     this.address,
     this.notes,
+    this.photoPath,
     this.isActive = true,
     required this.createdDate
     //, required String name, required String phone, required int visits, required String lastVisit, required String membership, required String status,
   });
 
   String get fullName => '$firstName $lastName';
+
+  bool get hasPhoto => photoPath != null && photoPath!.isNotEmpty;
 
   Customer copyWith({
     int? id,
@@ -41,6 +45,7 @@ class Customer {
     DateTime? dateOfBirth,
     String? address,
     String? notes,
+    String? photoPath,
     bool? isActive,
     DateTime? createdDate,
   }) {
@@ -55,6 +60,7 @@ class Customer {
       dateOfBirth: dateOfBirth ?? this.dateOfBirth,
       address: address ?? this.address,
       notes: notes ?? this.notes,
+      photoPath: photoPath ?? this.photoPath,
       isActive: isActive ?? this.isActive,
       createdDate: createdDate ?? this.createdDate,
     );
@@ -72,6 +78,7 @@ class Customer {
       'dateOfBirth': dateOfBirth?.toIso8601String(),
       'address': address,
       'notes': notes,
+      'photoPath': photoPath,
       'isActive': isActive,
       'createdDate': createdDate.toIso8601String(),
     };
@@ -91,6 +98,7 @@ class Customer {
           : null,
       address: map['address'],
       notes: map['notes'],
+      photoPath: map['photoPath'],
       isActive: map['isActive'] ?? true,
       createdDate: DateTime.parse(map['createdDate']),
     );

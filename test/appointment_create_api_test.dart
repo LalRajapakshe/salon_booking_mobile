@@ -90,6 +90,28 @@ void main() {
     expect(line, {'serviceId': 2});
   });
 
+  test('addService sends a preferred window and leaves the scheduled times empty', () async {
+    late Map<String, dynamic> line;
+    final repository = repositoryFor(MockClient((request) async {
+      line = jsonDecode(request.body) as Map<String, dynamic>;
+      return http.Response(jsonEncode(serviceBody(8, 3)), 200);
+    }));
+
+    await repository.addService(
+      appointmentId: 42,
+      serviceId: 3,
+      preferredStartTime: DateTime(2026, 10, 6, 9, 0),
+      preferredEndTime: DateTime(2026, 10, 6, 10, 30),
+    );
+
+    expect(line['serviceId'], 3);
+    expect(line['preferredStartTime'], '2026-10-06T09:00:00');
+    expect(line['preferredEndTime'], '2026-10-06T10:30:00');
+    expect(line.containsKey('startTime'), isFalse);
+    expect(line.containsKey('endTime'), isFalse);
+    expect(line.containsKey('employeeId'), isFalse);
+  });
+
   test('the local scheduled status is omitted so the server can default it', () async {
     late Map<String, dynamic> create;
     final repository = repositoryFor(MockClient((request) async {

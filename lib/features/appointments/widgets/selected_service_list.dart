@@ -29,6 +29,8 @@ class SelectedServiceList extends StatelessWidget {
   final bool enabled;
   final ValueChanged<int> onRemove;
   final ValueChanged<int> onFindAvailability;
+  final void Function(int serviceId, TimeOfDay time) onStartTime;
+  final void Function(int serviceId, TimeOfDay time) onFinishTime;
   final void Function(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) onSelectSlot;
   final ValueChanged<int> onClearSchedule;
   final ServiceLookup Function(int serviceId)? serviceLookup;
@@ -40,6 +42,8 @@ class SelectedServiceList extends StatelessWidget {
     required this.enabled,
     required this.onRemove,
     required this.onFindAvailability,
+    required this.onStartTime,
+    required this.onFinishTime,
     required this.onSelectSlot,
     required this.onClearSchedule,
     this.serviceLookup,
@@ -61,6 +65,8 @@ class SelectedServiceList extends StatelessWidget {
             enabled: enabled,
             onRemove: onRemove,
             onFindAvailability: onFindAvailability,
+            onStartTime: onStartTime,
+            onFinishTime: onFinishTime,
             onSelectSlot: onSelectSlot,
             onClearSchedule: onClearSchedule,
             serviceLookup: serviceLookup,
@@ -77,6 +83,8 @@ class _ServiceCard extends StatelessWidget {
   final bool enabled;
   final ValueChanged<int> onRemove;
   final ValueChanged<int> onFindAvailability;
+  final void Function(int serviceId, TimeOfDay time) onStartTime;
+  final void Function(int serviceId, TimeOfDay time) onFinishTime;
   final void Function(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) onSelectSlot;
   final ValueChanged<int> onClearSchedule;
   final ServiceLookup Function(int serviceId)? serviceLookup;
@@ -87,6 +95,8 @@ class _ServiceCard extends StatelessWidget {
     required this.enabled,
     required this.onRemove,
     required this.onFindAvailability,
+    required this.onStartTime,
+    required this.onFinishTime,
     required this.onSelectSlot,
     required this.onClearSchedule,
     this.serviceLookup,
@@ -96,10 +106,8 @@ class _ServiceCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final service = serviceLookup?.call(line.serviceId) ?? AppointmentCatalog.service(line.serviceId);
     final price = CurrencyFormatter.formatWithSymbol(service.price);
-    final schedule = line.hasSchedule
-        ? '${line.employeeName ?? 'Employee ${line.employeeId}'}   ${formatAppointmentTime(line.startTime!)} → ${formatAppointmentTime(line.endTime!)}'
-            '${line.scheduleSaved ? ' · Scheduled' : ''}'
-        : 'Unscheduled';
+    final schedule = _scheduleLabel();
+    final preferred = _preferredLabel();
 
     return Material(
       color: const Color(0xffF7F8FC),
@@ -138,7 +146,19 @@ class _ServiceCard extends StatelessWidget {
                 ),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(child: _timeButton(context, start: true)),
+                const SizedBox(width: 8),
+                Expanded(child: _timeButton(context, start: false)),
+              ],
+            ),
             const SizedBox(height: 4),
+            if (preferred != null) ...[
+              Text(preferred, style: const TextStyle(fontSize: 13)),
+              const SizedBox(height: 4),
+            ],
             Text(schedule, style: const TextStyle(fontSize: 13)),
             if (line.hasSchedule)
               Align(
@@ -153,6 +173,55 @@ class _ServiceCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  String? _preferredLabel() {
+    final start = line.preferredStart;
+    final end = line.preferredEnd;
+    if (start == null && end == null) return null;
+    final startLabel = start == null ? 'Preferred start' : formatAppointmentTime(start);
+    final endLabel = end == null ? 'Preferred finish' : formatAppointmentTime(end);
+    return 'Preferred $startLabel → $endLabel';
+  }
+
+  String _scheduleLabel() {
+    final start = line.startTime;
+    final end = line.endTime;
+    if (line.hasSchedule) {
+      final name = line.employeeName ?? 'Employee ${line.employeeId}';
+      final saved = line.scheduleSaved ? ' · Scheduled' : '';
+      return '$name   ${formatAppointmentTime(start!)} → ${formatAppointmentTime(end!)}$saved';
+    }
+    if (start != null || end != null) {
+      final startLabel = start == null ? 'Start time' : formatAppointmentTime(start);
+      final endLabel = end == null ? 'Finish time' : formatAppointmentTime(end);
+      return '$startLabel → $endLabel';
+    }
+    return 'Unscheduled';
+  }
+
+  Widget _timeButton(BuildContext context, {required bool start}) {
+    final value = start ? line.preferredStart : line.preferredEnd;
+    final label = value == null
+        ? (start ? 'Preferred start' : 'Preferred finish')
+        : formatAppointmentTime(value);
+    return OutlinedButton(
+      onPressed: enabled
+          ? () async {
+              final picked = await showTimePicker(
+                context: context,
+                initialTime: value ?? const TimeOfDay(hour: 9, minute: 0),
+              );
+              if (picked == null) return;
+              if (start) {
+                onStartTime(line.serviceId, picked);
+              } else {
+                onFinishTime(line.serviceId, picked);
+              }
+            }
+          : null,
+      child: Text(label),
     );
   }
 

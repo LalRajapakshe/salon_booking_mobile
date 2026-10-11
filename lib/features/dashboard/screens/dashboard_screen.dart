@@ -18,6 +18,7 @@ import '../widgets/section_title.dart';
 import '../../appointments/screens/appointments_screen.dart';
 import '../../customers/screens/customers_screen.dart';
 import '../../employees/screens/employees_screen.dart';
+import '../../reception/screens/reception_desk_screen.dart';
 import '../../revenue/screens/revenue_dashboard_screen.dart';
 import '../../scheduling/screens/scheduling_board_screen.dart';
 import '../../services/screens/services_screen.dart';
@@ -385,6 +386,12 @@ void _showComingSoon(BuildContext context, String moduleName) {
 
 List<_DashboardItem> _quickActionItems(BuildContext context) {
   return [
+    _DashboardItem(
+      icon: Icons.desk,
+      title: 'Reception Desk',
+      color: Colors.deepPurple,
+      onTap: () => _openScreen(context, const ReceptionDeskScreen()),
+    ),
     _DashboardItem(
       icon: Icons.calendar_month,
       title: 'Appointment',

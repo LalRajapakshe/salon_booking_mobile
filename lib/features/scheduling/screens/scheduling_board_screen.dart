@@ -4,10 +4,15 @@ import '../../../core/api/api_exception.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../appointments/data/appointment_repository.dart';
 import '../../appointments/data/availability_repository.dart';
+import '../../appointments/models/appointment.dart';
+import '../../appointments/models/appointment_service_line.dart';
+import '../../appointments/models/appointment_status.dart';
+import '../../appointments/models/employee_availability.dart' as availability;
 import '../../customers/data/customer_repository.dart';
 import '../../employees/data/employee_repository.dart';
 import '../../services/data/service_repository.dart';
 import '../api/scheduling_board_mapper.dart';
+import '../api/vacant_slot_assignments.dart';
 import '../data/mock_scheduling_data.dart';
 import '../models/scheduling_models.dart';
 import '../widgets/appointment_schedule_panel.dart';
@@ -17,6 +22,7 @@ import '../widgets/scheduling_legend.dart';
 import '../widgets/service_line_schedule_dialog.dart';
 import '../widgets/scheduling_toolbar.dart';
 import '../widgets/time_slot_grid.dart';
+import '../widgets/working_hours_dialog.dart';
 
 class SchedulingBoardScreen extends StatefulWidget {
   final AppointmentRepository? appointments;
@@ -43,6 +49,9 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     staff: [],
     appointments: [],
   );
+  List<Appointment> _dayAppointments = const [];
+  Map<int, String> _customerNames = const {};
+  Map<int, String> _serviceNamesById = const {};
   late final AppointmentRepository _repository;
   late final AvailabilityRepository _availability;
   late final EmployeeRepository _employees;
@@ -187,6 +196,9 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         _loading = false;
         _error = null;
         _loaded = day;
+        _dayAppointments = appointments;
+        _customerNames = directory.customerNames;
+        _serviceNamesById = directory.serviceNames;
         _alignFilters();
       });
     } catch (error) {
@@ -196,6 +208,7 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         _error = error is ApiException
             ? error.message
             : 'The schedule could not be loaded.';
+        _dayAppointments = const [];
       });
     }
   }
@@ -292,6 +305,74 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     if (result.scheduled || result.refreshed) await _load();
   }
 
+  Future<List<VacantSlotAssignment>> _assignmentsFor(
+    SchedulingStaff staff,
+    int startMinute,
+  ) async {
+    final employeeId = int.tryParse(staff.staffId) ?? 0;
+    if (employeeId <= 0) return const [];
+    final serviceIds = <int>{
+      for (final appointment in _dayAppointments)
+        if (_canPlace(appointment.status))
+          for (final line in appointment.appointmentServices)
+            if (!line.isCancelled && !_isPlaced(line)) line.serviceId,
+    }..remove(0);
+
+    final slotsByService = <int, List<availability.AvailabilitySlot>>{};
+    for (final serviceId in serviceIds) {
+      final rows = await _availability.find(
+        serviceId: serviceId,
+        date: _date,
+        employeeId: employeeId,
+      );
+      slotsByService[serviceId] = [
+        for (final row in rows)
+          if (row.employeeId == employeeId) ...row.slots,
+      ];
+    }
+    return VacantSlotAssignments.match(
+      appointments: _dayAppointments,
+      employeeId: employeeId,
+      date: _date,
+      startMinute: startMinute,
+      slotsByService: slotsByService,
+      customerNames: _customerNames,
+      serviceNames: _serviceNamesById,
+    );
+  }
+
+  bool _canPlace(AppointmentStatus status) {
+    return status != AppointmentStatus.cancelled &&
+        status != AppointmentStatus.completed &&
+        status != AppointmentStatus.noShow;
+  }
+
+  bool _isPlaced(AppointmentServiceLine line) {
+    final employeeId = line.employeeId;
+    return line.startTime != null &&
+        line.endTime != null &&
+        employeeId != null &&
+        employeeId > 0;
+  }
+
+  Future<void> _assignVacant(SchedulingStaff staff, VacantSlotAssignment assignment) async {
+    final employeeId = int.tryParse(staff.staffId) ?? 0;
+    await _repository.scheduleLine(
+      appointmentId: assignment.appointmentId,
+      appointmentServiceId: assignment.appointmentServiceId,
+      employeeId: employeeId,
+      startTime: assignment.startTime,
+      endTime: assignment.endTime,
+      rowVersion: assignment.rowVersion,
+    );
+    if (!mounted) return;
+    AppSnackBar.success(
+      context,
+      '${assignment.serviceName} was assigned to ${staff.name}.',
+    );
+    await _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final conflict = firstConflict(_visibleBlocks);
@@ -305,6 +386,12 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
           'Schedule',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => showWorkingHoursDialog(context: context, date: _date),
+            child: const Text('Working hours'),
+          ),
+        ],
       ),
       body: Padding(
         padding: EdgeInsets.fromLTRB(padding, padding, padding, 12),
@@ -430,6 +517,8 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
           staff: staff,
           date: _date,
           startMinute: startMinute,
+          loadAssignments: _demo ? null : () => _assignmentsFor(staff, startMinute),
+          onAssign: _demo ? null : (assignment) => _assignVacant(staff, assignment),
         );
       },
             ),

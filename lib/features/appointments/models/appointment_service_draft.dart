@@ -8,6 +8,8 @@ class AppointmentServiceDraft {
   final String? employeeName;
   final TimeOfDay? startTime;
   final TimeOfDay? endTime;
+  final TimeOfDay? preferredStart;
+  final TimeOfDay? preferredEnd;
   final int? appointmentServiceId;
   final String? rowVersion;
   final int? durationMinutes;
@@ -20,6 +22,8 @@ class AppointmentServiceDraft {
     this.employeeName,
     this.startTime,
     this.endTime,
+    this.preferredStart,
+    this.preferredEnd,
     this.appointmentServiceId,
     this.rowVersion,
     this.durationMinutes,
@@ -34,6 +38,8 @@ class AppointmentServiceDraft {
     Object? employeeName = _keep,
     Object? startTime = _keep,
     Object? endTime = _keep,
+    Object? preferredStart = _keep,
+    Object? preferredEnd = _keep,
     Object? appointmentServiceId = _keep,
     Object? rowVersion = _keep,
     Object? durationMinutes = _keep,
@@ -46,6 +52,8 @@ class AppointmentServiceDraft {
       employeeName: employeeName == _keep ? this.employeeName : employeeName as String?,
       startTime: startTime == _keep ? this.startTime : startTime as TimeOfDay?,
       endTime: endTime == _keep ? this.endTime : endTime as TimeOfDay?,
+      preferredStart: preferredStart == _keep ? this.preferredStart : preferredStart as TimeOfDay?,
+      preferredEnd: preferredEnd == _keep ? this.preferredEnd : preferredEnd as TimeOfDay?,
       appointmentServiceId: appointmentServiceId == _keep
           ? this.appointmentServiceId
           : appointmentServiceId as int?,

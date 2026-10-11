@@ -1,8 +1,11 @@
+import 'dart:typed_data';
+
 import '../../../core/api/api_client.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/auth/auth_session.dart';
 import '../api/customer_api_mapper.dart';
 import '../models/customer_model.dart';
+import '../photos/customer_photo_store.dart';
 
 class CustomerRepository {
   CustomerRepository({ApiClient? client, AuthSession? session})
@@ -11,6 +14,7 @@ class CustomerRepository {
 
   final ApiClient _client;
   final AuthSession _session;
+  final CustomerPhotoCache photos = CustomerPhotoCache();
 
   bool get isApiBacked => _session.isSignedIn;
 
@@ -56,6 +60,47 @@ class CustomerRepository {
       throw const ApiException('The server returned an unexpected response.');
     }
     return created;
+  }
+
+  /// `POST /api/Customers/{id}/photo`. The server stores the file and returns the customer.
+  Future<Customer> uploadPhoto(int customerId, List<int> bytes) async {
+    final saved = CustomerApiMapper.customer(
+      await _client.postMultipart(
+        '/api/Customers/$customerId/photo',
+        field: 'file',
+        bytes: bytes,
+        filename: 'photo.jpg',
+      ),
+    );
+    if (saved.photoPath != null) {
+      photos.write(customerId, saved.photoPath!, Uint8List.fromList(bytes));
+    }
+    return saved;
+  }
+
+  /// `DELETE /api/Customers/{id}/photo`.
+  Future<Customer> removePhoto(int customerId) async {
+    final saved = CustomerApiMapper.customer(
+      await _client.deleteJson('/api/Customers/$customerId/photo'),
+    );
+    photos.forget(customerId);
+    return saved;
+  }
+
+  /// `GET /api/Customers/{id}/photo`. A missing photo is null.
+  Future<Uint8List?> fetchPhoto(int customerId, String photoPath) async {
+    final cached = photos.read(customerId, photoPath);
+    if (cached != null) return cached;
+    try {
+      final bytes = Uint8List.fromList(
+        await _client.getBytes('/api/Customers/$customerId/photo'),
+      );
+      photos.write(customerId, photoPath, bytes);
+      return bytes;
+    } on ApiException catch (error) {
+      if (error.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   static String _dateOnly(DateTime value) {

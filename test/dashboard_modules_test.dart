@@ -8,6 +8,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const quickActionTitles = [
+    'Reception Desk',
     'Appointment',
     'Appointment Service',
     'Appointment Status History',
@@ -60,7 +61,7 @@ void main() {
 
     expect(quickTitles, quickActionTitles);
     expect(systemTitles, systemModuleTitles);
-    expect(quickTitles.length + systemTitles.length, 23);
+    expect(quickTitles.length + systemTitles.length, 24);
     expect(tester.takeException(), isNull);
   });
 
@@ -80,7 +81,7 @@ void main() {
 
       expect(find.text('Quick Action'), findsOneWidget);
       expect(find.text('System Modules'), findsOneWidget);
-      expect(find.byType(QuickActionCard), findsNWidgets(16));
+      expect(find.byType(QuickActionCard), findsNWidgets(17));
       expect(find.byType(DashboardCard), findsNWidgets(7));
       expect(tester.takeException(), isNull);
     }
@@ -99,7 +100,7 @@ void main() {
     await tester.pumpWidget(MaterialApp(home: DashboardScreen()));
     await tester.pumpAndSettle();
 
-    expect(find.byType(QuickActionCard), findsNWidgets(16));
+    expect(find.byType(QuickActionCard), findsNWidgets(17));
     expect(find.byType(DashboardCard), findsNWidgets(7));
 
     while (tester.takeException() != null) {}

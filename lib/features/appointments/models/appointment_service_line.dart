@@ -8,6 +8,8 @@ class AppointmentServiceLine {
   final int? employeeId;
   final DateTime? startTime;
   final DateTime? endTime;
+  final DateTime? preferredStartTime;
+  final DateTime? preferredEndTime;
   final int? durationMinutes;
   final double? unitPrice;
   final int? sequence;
@@ -24,6 +26,8 @@ class AppointmentServiceLine {
     this.employeeId,
     this.startTime,
     this.endTime,
+    this.preferredStartTime,
+    this.preferredEndTime,
     this.durationMinutes,
     this.unitPrice,
     this.sequence,

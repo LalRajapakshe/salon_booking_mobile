@@ -27,6 +27,7 @@ class CreateAppointmentScreen extends StatefulWidget {
     this.customers,
     this.services,
     this.liveLookups = false,
+    this.initialCustomerId,
   });
 
   final AppointmentRepository? repository;
@@ -36,6 +37,9 @@ class CreateAppointmentScreen extends StatefulWidget {
 
   /// Uses customers and services stored for the signed-in branch.
   final bool liveLookups;
+
+  /// Prefills the customer when the receptionist continues from walk-in registration.
+  final int? initialCustomerId;
 
   @override
   State<CreateAppointmentScreen> createState() => _CreateAppointmentScreenState();
@@ -74,6 +78,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   @override
   void initState() {
     super.initState();
+    _customerId = widget.initialCustomerId;
     if (widget.liveLookups) {
       _loadingLookups = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -230,6 +235,47 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
     }
   }
 
+  void _setPreferredStart(int serviceId, TimeOfDay time) {
+    _updateService(
+      serviceId,
+      (line) => line.copyWith(preferredStart: time),
+    );
+  }
+
+  void _setPreferredFinish(int serviceId, TimeOfDay time) {
+    _updateService(
+      serviceId,
+      (line) => line.copyWith(preferredEnd: time),
+    );
+  }
+
+  String? _serviceTimeError() {
+    for (final line in _services) {
+      final name = _serviceName(line.serviceId);
+      final hasStart = line.preferredStart != null;
+      final hasFinish = line.preferredEnd != null;
+      if (hasStart != hasFinish) {
+        return 'Enter both preferred start and preferred finish for $name.';
+      }
+      if (hasStart && hasFinish) {
+        final start = line.preferredStart!;
+        final finish = line.preferredEnd!;
+        final startMinutes = start.hour * 60 + start.minute;
+        final finishMinutes = finish.hour * 60 + finish.minute;
+        if (finishMinutes <= startMinutes) {
+          return 'Preferred finish must be after preferred start for $name.';
+        }
+      }
+    }
+    return null;
+  }
+
+  DateTime? _clockOnAppointment(TimeOfDay? time) {
+    final date = _appointmentDate;
+    if (date == null || time == null) return null;
+    return DateTime(date.year, date.month, date.day, time.hour, time.minute);
+  }
+
   void _selectSlot(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) {
     _updateService(
       serviceId,
@@ -368,6 +414,12 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
 
     if (widget.liveLookups && (_loadingLookups || _lookupError != null)) return;
 
+    final timeError = _serviceTimeError();
+    if (timeError != null) {
+      setState(() => _serviceError = timeError);
+      return;
+    }
+
     if (!_repository.isApiBacked) {
       final customer = AppointmentCatalog.customer(_customerId!);
       AppSnackBar.success(context, '${customer.fullName} was saved.');
@@ -398,6 +450,8 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         final createdLine = await _repository.addService(
           appointmentId: _createdAppointmentId!,
           serviceId: line.serviceId,
+          preferredStartTime: _clockOnAppointment(line.preferredStart),
+          preferredEndTime: _clockOnAppointment(line.preferredEnd),
         );
         _services[index] = line.copyWith(
           appointmentServiceId: createdLine.appointmentServiceId,
@@ -646,6 +700,8 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                         employeeName: null,
                         startTime: null,
                         endTime: null,
+                        preferredStart: null,
+                        preferredEnd: null,
                       );
                     }
                   });
@@ -741,6 +797,8 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
           enabled: !_saving,
           onRemove: _removeService,
           onFindAvailability: _findAvailability,
+          onStartTime: _setPreferredStart,
+          onFinishTime: _setPreferredFinish,
           onSelectSlot: _selectSlot,
           onClearSchedule: _clearSchedule,
           serviceLookup: widget.liveLookups ? _serviceById : null,

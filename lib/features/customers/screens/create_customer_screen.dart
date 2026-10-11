@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
@@ -11,11 +13,19 @@ import '../../../shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../data/customer_repository.dart';
 import '../models/customer_model.dart';
+import '../widgets/customer_photo_field.dart';
 
 class CreateCustomerScreen extends StatefulWidget {
   final CustomerRepository? repository;
+  final Future<Uint8List?> Function()? choosePhoto;
+  final Future<Uint8List?> Function()? takePhoto;
 
-  const CreateCustomerScreen({super.key, this.repository});
+  const CreateCustomerScreen({
+    super.key,
+    this.repository,
+    this.choosePhoto,
+    this.takePhoto,
+  });
 
   @override
   State<CreateCustomerScreen> createState() => _CreateCustomerScreenState();
@@ -39,6 +49,8 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
   bool _validateOnInteraction = false;
   bool _saving = false;
   String? _saveError;
+  Uint8List? _photoBytes;
+  int? _savedCustomerId;
   late final CustomerRepository _repository;
 
   bool get _apiBacked => _repository.isApiBacked;
@@ -92,17 +104,39 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
         _saveError = null;
       });
       try {
-        final created = await _repository.create(
-          firstName: _firstNameController.text,
-          lastName: _lastNameController.text,
-          mobileNo: _mobileNumberController.text,
-          email: _emptyToNull(_emailController.text),
-          gender: _gender,
-          dateOfBirth: _dateOfBirth,
-          remarks: _emptyToNull(_notesController.text),
-        );
+        var savedId = _savedCustomerId;
+        var savedName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
+        if (savedId == null) {
+          final created = await _repository.create(
+            firstName: _firstNameController.text,
+            lastName: _lastNameController.text,
+            mobileNo: _mobileNumberController.text,
+            email: _emptyToNull(_emailController.text),
+            gender: _gender,
+            dateOfBirth: _dateOfBirth,
+            remarks: _emptyToNull(_notesController.text),
+          );
+          savedId = created.id;
+          savedName = created.fullName;
+          _savedCustomerId = created.id;
+        }
+
+        final photo = _photoBytes;
+        if (photo != null) {
+          try {
+            await _repository.uploadPhoto(savedId, photo);
+          } on ApiException catch (error) {
+            if (!mounted) return;
+            setState(() {
+              _saving = false;
+              _saveError = '$savedName was saved, but the photo was not stored. ${error.message}';
+            });
+            return;
+          }
+        }
+
         if (!mounted) return;
-        AppSnackBar.success(context, '${created.fullName} was saved.');
+        AppSnackBar.success(context, '$savedName was saved.');
         Navigator.of(context).pop(true);
       } on ApiException catch (error) {
         if (!mounted) return;
@@ -236,6 +270,25 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
+                if (_apiBacked) ...[
+                  CustomerPhotoField(
+                    bytes: _photoBytes,
+                    errorText: _photoBytes == null ? _saveError : null,
+                    enabled: !_saving,
+                    choosePhoto: widget.choosePhoto,
+                    takePhoto: widget.takePhoto,
+                    onSelected: (bytes) => setState(() {
+                      _photoBytes = bytes;
+                      _saveError = null;
+                    }),
+                    onInvalid: (message) => setState(() => _saveError = message),
+                    onRemove: () => setState(() {
+                      _photoBytes = null;
+                      _saveError = null;
+                    }),
+                  ),
+                  const SizedBox(height: 16),
+                ],
                 if (!_apiBacked) ...[
                   AppTextField(
                     controller: _customerCodeController,
@@ -353,7 +406,14 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                       ? null
                       : (value) => setState(() => _isActive = value),
                 ),
-                if (_saveError != null) ...[
+                if (_apiBacked && _photoBytes != null && _saveError != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    _saveError!,
+                    style: const TextStyle(color: Colors.red),
+                  ),
+                ],
+                if (!_apiBacked && _saveError != null) ...[
                   const SizedBox(height: 8),
                   Text(
                     _saveError!,

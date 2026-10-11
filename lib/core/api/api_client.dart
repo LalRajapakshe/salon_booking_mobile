@@ -34,6 +34,41 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> deleteJson(String path) {
+    return _sendMap(() => _http.delete(_uri(path), headers: _headers()));
+  }
+
+  /// Multipart upload. The client sets the multipart content type and boundary.
+  Future<Map<String, dynamic>> postMultipart(
+    String path, {
+    required String field,
+    required List<int> bytes,
+    required String filename,
+  }) {
+    return _sendMap(() async {
+      final request = http.MultipartRequest('POST', _uri(path));
+      request.headers.addAll(_headers());
+      request.files.add(http.MultipartFile.fromBytes(field, bytes, filename: filename));
+      final streamed = await _http.send(request);
+      return http.Response.fromStream(streamed);
+    });
+  }
+
+  Future<List<int>> getBytes(String path) async {
+    final http.Response response;
+    try {
+      response = await _http.get(_uri(path), headers: _headers());
+    } catch (_) {
+      throw const ApiException('Cannot reach the salon server.');
+    }
+
+    if (response.statusCode >= 200 && response.statusCode < 300) {
+      return response.bodyBytes;
+    }
+
+    throw ApiException(_message(response), statusCode: response.statusCode);
+  }
+
   Future<Map<String, dynamic>> _sendMap(Future<http.Response> Function() request) async {
     final decoded = await _decode(request);
     if (decoded == null) return {};

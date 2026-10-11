@@ -76,6 +76,8 @@ class AppointmentApiMapper {
             employeeId: item['employeeId'] == null ? null : _int(item['employeeId']),
             startTime: _date(item['startTime']),
             endTime: _date(item['endTime']),
+            preferredStartTime: _date(item['preferredStartTime']),
+            preferredEndTime: _date(item['preferredEndTime']),
             durationMinutes: item['durationMinutes'] == null ? null : _int(item['durationMinutes']),
             unitPrice: item['unitPrice'] == null ? null : (item['unitPrice'] as num).toDouble(),
             sequence: item['sequence'] == null ? null : _int(item['sequence']),

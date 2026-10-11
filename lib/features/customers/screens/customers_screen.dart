@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../data/customer_repository.dart';
 import '../models/customer_model.dart';
+import '../widgets/customer_avatar.dart';
+import '../widgets/customer_photo_sheet.dart';
 import 'create_customer_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
@@ -628,11 +630,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
         return DataRow(
           cells: [
             DataCell(
-              Text(
-                customer.fullName,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontWeight: FontWeight.w600),
+              Row(
+                children: [
+                  CustomerAvatar(customer: customer, repository: _repository),
+                  const SizedBox(width: 10),
+                  Flexible(
+                    child: Text(
+                      customer.fullName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
               ),
             ),
             DataCell(
@@ -676,13 +686,28 @@ class _CustomersScreenState extends State<CustomersScreen> {
                     case 'edit':
                       // TODO: Connect to Customer Edit form.
                       break;
+                    case 'photo':
+                      _editPhoto(customer);
+                      break;
                     case 'delete':
                       // TODO: Connect to Delete confirmation.
                       break;
                   }
                 },
-                itemBuilder: (context) => const [
-                  PopupMenuItem<String>(
+                itemBuilder: (context) => [
+                  if (_repository.isApiBacked)
+                    const PopupMenuItem<String>(
+                      value: 'photo',
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.photo_camera_outlined, size: 20),
+                          SizedBox(width: 12),
+                          Text('Photo'),
+                        ],
+                      ),
+                    ),
+                  const PopupMenuItem<String>(
                     value: 'view',
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
@@ -722,6 +747,19 @@ class _CustomersScreenState extends State<CustomersScreen> {
         );
       }).toList(),
     );
+  }
+
+  Future<void> _editPhoto(Customer customer) async {
+    final updated = await showCustomerPhotoSheet(
+      context: context,
+      customer: customer,
+      repository: _repository,
+    );
+    if (!mounted || updated == null) return;
+    setState(() {
+      final index = _customers.indexWhere((item) => item.id == updated.id);
+      if (index >= 0) _customers[index] = updated;
+    });
   }
 
   Widget _buildPagination({
