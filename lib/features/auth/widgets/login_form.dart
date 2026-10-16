@@ -8,6 +8,7 @@ class LoginForm extends StatelessWidget {
     super.key,
     required this.usernameController,
     required this.passwordController,
+    this.tenantCodeController,
     required this.formKey,
     this.isLoading = false,
     this.obscurePassword = true,
@@ -22,6 +23,7 @@ class LoginForm extends StatelessWidget {
 
   final TextEditingController usernameController;
   final TextEditingController passwordController;
+  final TextEditingController? tenantCodeController;
 
   final bool isLoading;
   final bool obscurePassword;
@@ -74,6 +76,16 @@ class LoginForm extends StatelessWidget {
               return null;
             },
           ),
+
+          if (tenantCodeController != null) ...[
+            const SizedBox(height: AppDimensions.spaceM),
+            AppTextField(
+              controller: tenantCodeController!,
+              labelText: 'Tenant code',
+              hintText: 'Only if your username is used by more than one salon',
+              prefixIcon: Icons.apartment_outlined,
+            ),
+          ],
 
           const SizedBox(height: AppDimensions.spaceM),
 

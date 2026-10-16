@@ -21,6 +21,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _tenantCodeController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _rememberMe = false;
@@ -30,6 +31,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _usernameController.dispose();
     _passwordController.dispose();
+    _tenantCodeController.dispose();
     super.dispose();
   }
 
@@ -58,6 +60,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await AuthApi().login(
       username: _usernameController.text.trim(),
       password: _passwordController.text,
+      tenantCode: _tenantCodeController.text,
     );
   } on ApiException catch (error) {
     if (!mounted) return;
@@ -120,6 +123,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     formKey: _formKey,
                     usernameController: _usernameController,
                     passwordController: _passwordController,
+                    tenantCodeController: _tenantCodeController,
                     obscurePassword: _obscurePassword,
                     rememberMe: _rememberMe,
                     isLoading: _isLoading,

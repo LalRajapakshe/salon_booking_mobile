@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/auth/auth_session.dart';
 import '../../../shared/widgets/app_snackbar.dart';
+import '../../settings/screens/permissions_screen.dart';
+import '../../settings/screens/roles_screen.dart';
+import '../../settings/screens/users_screen.dart';
 import '../widgets/ai_summary_card.dart';
 import '../widgets/dashboard_card.dart';
 import '../widgets/employee_card.dart';
@@ -54,7 +58,7 @@ class DashboardScreen extends StatelessWidget {
           children: [
             ExecutiveHeader(
               greeting: "Good Morning 👋",
-              userName: "Administrator",
+              userName: AuthSession.instance.fullName ?? AuthSession.instance.username ?? "Administrator",
               date: "Monday, 20 July 2026",
               businessHealth: 94,
             ),
@@ -492,37 +496,43 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
 }
 
 List<_DashboardItem> _systemModuleItems(BuildContext context) {
+  final session = AuthSession.instance;
   return [
-    _DashboardItem(
-      icon: Icons.vpn_key,
-      title: 'Permission',
-      onTap: () => _showComingSoon(context, 'Permission'),
-    ),
-    _DashboardItem(
-      icon: Icons.admin_panel_settings,
-      title: 'Role',
-      onTap: () => _showComingSoon(context, 'Role'),
-    ),
-    _DashboardItem(
-      icon: Icons.rule,
-      title: 'Role Permission',
-      onTap: () => _showComingSoon(context, 'Role Permission'),
-    ),
+    if (session.can('permissions.read'))
+      _DashboardItem(
+        icon: Icons.vpn_key,
+        title: 'Permission',
+        onTap: () => _openScreen(context, const PermissionsScreen()),
+      ),
+    if (session.can('roles.read'))
+      _DashboardItem(
+        icon: Icons.admin_panel_settings,
+        title: 'Role',
+        onTap: () => _openScreen(context, const RolesScreen()),
+      ),
+    if (session.can('roles.manage'))
+      _DashboardItem(
+        icon: Icons.rule,
+        title: 'Role Permission',
+        onTap: () => _openScreen(context, const RolesScreen(assignPermissions: true)),
+      ),
     _DashboardItem(
       icon: Icons.apartment,
       title: 'Tenant',
       onTap: () => _showComingSoon(context, 'Tenant'),
     ),
-    _DashboardItem(
-      icon: Icons.group,
-      title: 'Users',
-      onTap: () => _showComingSoon(context, 'Users'),
-    ),
-    _DashboardItem(
-      icon: Icons.manage_accounts,
-      title: 'User Roles',
-      onTap: () => _showComingSoon(context, 'User Roles'),
-    ),
+    if (session.can('users.read'))
+      _DashboardItem(
+        icon: Icons.group,
+        title: 'Users',
+        onTap: () => _openScreen(context, const UsersScreen()),
+      ),
+    if (session.can('users.manage'))
+      _DashboardItem(
+        icon: Icons.manage_accounts,
+        title: 'User Roles',
+        onTap: () => _openScreen(context, const UsersScreen(assignRoles: true)),
+      ),
     _DashboardItem(
       icon: Icons.settings,
       title: 'Setting',

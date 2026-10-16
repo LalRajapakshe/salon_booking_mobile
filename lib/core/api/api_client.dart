@@ -24,6 +24,16 @@ class ApiClient {
     return _sendList(() => _http.get(_uri(path), headers: _headers()));
   }
 
+  Future<Map<String, dynamic>> putJson(String path, Map<String, dynamic> body) {
+    return _sendMap(
+      () => _http.put(
+        _uri(path),
+        headers: _headers(json: true),
+        body: jsonEncode(body),
+      ),
+    );
+  }
+
   Future<Map<String, dynamic>> postJson(String path, Map<String, dynamic> body) {
     return _sendMap(
       () => _http.post(
@@ -119,7 +129,7 @@ class ApiClient {
     } catch (_) {}
 
     if (response.statusCode == 401) return 'Sign in is required.';
-    if (response.statusCode == 403) return 'You cannot view another branch.';
+    if (response.statusCode == 403) return 'You do not have permission to do that.';
     return 'The request failed (${response.statusCode}).';
   }
 }
