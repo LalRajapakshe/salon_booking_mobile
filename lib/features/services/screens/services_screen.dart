@@ -208,25 +208,50 @@ class _ServicesScreenState extends State<ServicesScreen> {
     await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) =>
-            CreateServiceScreen(directory: _directory, service: service),
+        builder: (_) => CreateServiceScreen(
+          directory: _apiBacked
+              ? ServiceDirectory(services: [service])
+              : _directory,
+          service: service,
+          persistToApi: _apiBacked,
+          services: _services,
+        ),
       ),
     );
-    if (mounted) setState(() {});
+    if (!mounted) return;
+    if (_apiBacked) {
+      await _load();
+    } else {
+      setState(() {});
+    }
   }
 
   Future<void> _confirmDelete(SalonService service) async {
     final confirmed = await AppDialog.show(
       context: context,
       title: 'Delete Service?',
-      message:
-          'Are you sure you want to delete "${service.serviceName}"?\n\nThis action cannot be undone.',
+      message: _apiBacked
+          ? 'Hide "${service.serviceName}" from the list?\n\nThe record stays stored.'
+          : 'Are you sure you want to delete "${service.serviceName}"?\n\nThis action cannot be undone.',
       confirmText: 'Delete',
       cancelText: 'Cancel',
       icon: Icons.delete_outline,
       iconColor: AppColors.error,
     );
     if (!mounted || confirmed != true) return;
+
+    if (_apiBacked) {
+      try {
+        await _services.delete(service.serviceId);
+        if (!mounted) return;
+        AppSnackBar.success(context, '${service.serviceName} was deleted.');
+        await _load();
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        AppSnackBar.error(context, error.message);
+      }
+      return;
+    }
 
     _directory.delete(service.serviceId);
     setState(_clampPage);
@@ -238,16 +263,8 @@ class _ServicesScreenState extends State<ServicesScreen> {
       case ServiceMenuAction.view:
         _openDetails(service);
       case ServiceMenuAction.edit:
-        if (_apiBacked) {
-          AppSnackBar.info(context, 'Service update is not connected yet.');
-          return;
-        }
         _openEdit(service);
       case ServiceMenuAction.delete:
-        if (_apiBacked) {
-          AppSnackBar.info(context, 'Service delete is not connected yet.');
-          return;
-        }
         _confirmDelete(service);
     }
   }

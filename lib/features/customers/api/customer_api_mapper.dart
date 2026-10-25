@@ -36,6 +36,7 @@ class CustomerApiMapper {
       notes: _text(json['remarks']),
       photoPath: _text(json['photoPath']),
       isActive: json['isActive'] == true,
+      branchId: _int(json['branchId']),
       createdDate: created,
     );
   }

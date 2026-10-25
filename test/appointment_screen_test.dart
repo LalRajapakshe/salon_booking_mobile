@@ -76,6 +76,35 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('view is always open and edit stays open only before confirmation', (tester) async {
+    await pumpAt(tester, const AppointmentsScreen(), const Size(1280, 900));
+
+    await tester.enterText(find.byType(TextField), 'Nethmi');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Actions'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<PopupMenuItem<String>>(find.widgetWithText(PopupMenuItem<String>, 'Edit')).enabled, isFalse);
+    await tester.tap(find.text('View'));
+    await tester.pumpAndSettle();
+    expect(find.text('Closed. The customer confirmation is already done.'), findsOneWidget);
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Clear search'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Amanda');
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Actions').first);
+    await tester.pumpAndSettle();
+    expect(tester.widget<PopupMenuItem<String>>(find.widgetWithText(PopupMenuItem<String>, 'Edit')).enabled, isTrue);
+    await tester.tap(find.text('Edit'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit Appointment'), findsWidgets);
+    expect(find.text('Notes'), findsOneWidget);
+    expect(find.text('Find Availability'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('create appointment validates, edits services, and saves', (tester) async {
     await pumpAt(tester, const AppointmentsScreen(), const Size(1280, 900));
     await tester.tap(find.text('Add Appointment'));

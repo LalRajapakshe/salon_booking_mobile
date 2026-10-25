@@ -79,4 +79,62 @@ class ServiceRepository {
     }
     return created;
   }
+
+  /// `PUT /api/Services/{id}`. The code stays as it was issued.
+  Future<SalonService> update(SalonService service) async {
+    final body = <String, dynamic>{
+      'branchId': service.branchId,
+      'serviceCategoryId': service.serviceCategoryId,
+      'serviceName': service.serviceName.trim(),
+      'description': service.description.trim(),
+      'durationMinutes': service.durationMinutes,
+      'price': service.price,
+      'cost': service.cost,
+      'commissionPercentage': service.commissionPercentage,
+      'isActive': service.isActive,
+    };
+    return ServiceApiMapper.service(
+      await _client.putJson('/api/Services/${service.serviceId}', body),
+      {service.serviceCategoryId: service.categoryName},
+    );
+  }
+
+  /// `DELETE /api/Services/{id}` marks the row deleted. It stays in the database.
+  Future<void> delete(int serviceId) {
+    return _client.deleteJson('/api/Services/$serviceId');
+  }
+
+  Future<ServiceCategoryRecord> createCategory({
+    required String categoryName,
+    required String description,
+    required int displayOrder,
+  }) async {
+    final created = ServiceApiMapper.category(
+      await _client.postJson('/api/ServiceCategories', {
+        'categoryName': categoryName.trim(),
+        'description': description.trim(),
+        'displayOrder': displayOrder,
+      }),
+    );
+    if (created.serviceCategoryId <= 0) {
+      throw const ApiException('The server returned an unexpected response.');
+    }
+    return created;
+  }
+
+  Future<ServiceCategoryRecord> updateCategory(ServiceCategoryRecord category) async {
+    return ServiceApiMapper.category(
+      await _client.putJson('/api/ServiceCategories/${category.serviceCategoryId}', {
+        'categoryName': category.categoryName.trim(),
+        'description': category.description.trim(),
+        'displayOrder': category.displayOrder,
+        'isActive': category.isActive,
+      }),
+    );
+  }
+
+  /// `DELETE /api/ServiceCategories/{id}` marks the row deleted.
+  Future<void> deleteCategory(int serviceCategoryId) {
+    return _client.deleteJson('/api/ServiceCategories/$serviceCategoryId');
+  }
 }

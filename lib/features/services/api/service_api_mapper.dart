@@ -3,11 +3,19 @@ import '../models/service_management_models.dart';
 
 class ServiceCategoryRecord {
   final int serviceCategoryId;
+  final String categoryCode;
   final String categoryName;
+  final String description;
+  final int displayOrder;
+  final bool isActive;
 
   const ServiceCategoryRecord({
     required this.serviceCategoryId,
+    this.categoryCode = '',
     required this.categoryName,
+    this.description = '',
+    this.displayOrder = 0,
+    this.isActive = true,
   });
 }
 
@@ -26,16 +34,24 @@ class ServiceApiMapper {
     ];
   }
 
+  static ServiceCategoryRecord category(Map<String, dynamic> json) {
+    return ServiceCategoryRecord(
+      serviceCategoryId: _int(json['serviceCategoryId']),
+      categoryCode: json['categoryCode'] as String? ?? '',
+      categoryName: json['categoryName'] as String? ?? '',
+      description: json['description'] as String? ?? '',
+      displayOrder: _int(json['displayOrder']),
+      isActive: json['isActive'] != false,
+    );
+  }
+
   static List<ServiceCategoryRecord> categories(Map<String, dynamic> json) {
     final items = json['items'];
     if (items is! List) return const [];
     return [
       for (final item in items)
         if (item is Map<String, dynamic>)
-          ServiceCategoryRecord(
-            serviceCategoryId: _int(item['serviceCategoryId']),
-            categoryName: item['categoryName'] as String? ?? '',
-          ),
+          category(item),
     ].where((item) => item.serviceCategoryId > 0 && item.categoryName.isNotEmpty).toList();
   }
 
@@ -59,7 +75,9 @@ class ServiceApiMapper {
       serviceCode: json['serviceCode'] as String? ?? '',
       serviceName: json['serviceName'] as String? ?? '',
       durationMinutes: _int(json['durationMinutes']),
-      price: json['price'] is num ? (json['price'] as num).toDouble() : 0,
+      price: _money(json['price']),
+      cost: _money(json['cost']),
+      commissionPercentage: _money(json['commissionPercentage']),
       branchId: _int(json['branchId']),
       serviceCategoryId: categoryId,
       categoryName: categoryNames[categoryId] ?? 'Category $categoryId',
@@ -67,6 +85,11 @@ class ServiceApiMapper {
       isActive: json['isActive'] == true,
       createdDate: created,
     );
+  }
+
+  static double _money(Object? value) {
+    if (value is num) return value.toDouble();
+    return double.tryParse('$value') ?? 0;
   }
 
   static int _int(Object? value) {

@@ -21,10 +21,12 @@ import '../widgets/section_title.dart';
 
 import '../../appointments/screens/appointments_screen.dart';
 import '../../customers/screens/customers_screen.dart';
+import '../../branches/screens/branches_screen.dart';
 import '../../employees/screens/employees_screen.dart';
 import '../../reception/screens/reception_desk_screen.dart';
 import '../../revenue/screens/revenue_dashboard_screen.dart';
 import '../../scheduling/screens/scheduling_board_screen.dart';
+import '../../services/screens/service_categories_screen.dart';
 import '../../services/screens/services_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -418,7 +420,7 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
       icon: Icons.store,
       title: 'Branch',
       color: Colors.brown,
-      onTap: () => _showComingSoon(context, 'Branch'),
+      onTap: () => _openScreen(context, const BranchesScreen()),
     ),
     _DashboardItem(
       icon: Icons.people,
@@ -466,7 +468,7 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
       icon: Icons.category,
       title: 'Service Category',
       color: Colors.purpleAccent,
-      onTap: () => _showComingSoon(context, 'Service Category'),
+      onTap: () => _openScreen(context, const ServiceCategoriesScreen()),
     ),
     _DashboardItem(
       icon: Icons.groups,

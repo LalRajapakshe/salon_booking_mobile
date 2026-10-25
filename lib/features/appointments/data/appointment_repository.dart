@@ -63,6 +63,39 @@ class AppointmentRepository {
     return created;
   }
 
+  /// `PUT /api/Appointments/{id}`. Customer and status stay as they are.
+  /// The server accepts this only while the appointment is still pending
+  /// and no service line has a time slot.
+  Future<Appointment> update({
+    required int appointmentId,
+    required DateTime appointmentDate,
+    String? notes,
+  }) async {
+    final trimmedNotes = notes?.trim();
+    final updated = AppointmentApiMapper.appointment(
+      await _client.putJson('/api/Appointments/$appointmentId', {
+        'appointmentDate': _dateOnly(appointmentDate),
+        'notes': trimmedNotes == null || trimmedNotes.isEmpty ? null : trimmedNotes,
+      }),
+    );
+    if (updated.appointmentId <= 0) {
+      throw const ApiException('The server returned an unexpected response.');
+    }
+    return updated;
+  }
+
+  /// `DELETE /api/Appointments/{id}/services/{lineId}` cancels that service line.
+  Future<void> cancelService({
+    required int appointmentId,
+    required int appointmentServiceId,
+    required String rowVersion,
+  }) async {
+    final version = Uri.encodeQueryComponent(rowVersion);
+    await _client.deleteJson(
+      '/api/Appointments/$appointmentId/services/$appointmentServiceId?rowVersion=$version',
+    );
+  }
+
   /// `POST /api/Appointments/{id}/services`. Duration, price, and sequence
   /// are taken from the service on the server.
   Future<AppointmentServiceLine> addService({

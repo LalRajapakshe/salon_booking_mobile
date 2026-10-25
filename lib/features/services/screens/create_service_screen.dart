@@ -51,13 +51,15 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
   List<ServiceCategoryRecord> _categories = [];
   late final ServiceRepository _services;
 
+  bool get _usesApi => widget.persistToApi;
+
   bool get _apiCreate => widget.persistToApi && !widget.isEditing;
 
   @override
   void initState() {
     super.initState();
     _services = widget.services ?? ServiceRepository();
-    if (_apiCreate) {
+    if (_usesApi) {
       _loadingCategories = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _loadCategories();
@@ -104,6 +106,13 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       setState(() {
         _categories = categories;
         _loadingCategories = false;
+        final existing = widget.service;
+        if (existing != null) {
+          final match = categories.where(
+            (item) => item.serviceCategoryId == existing.serviceCategoryId,
+          );
+          if (match.isNotEmpty) _category = match.first.categoryName;
+        }
         if (_category != null &&
             !categories.any((item) => item.categoryName == _category)) {
           _category = null;
@@ -137,7 +146,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     final duration = tryParseDuration(_durationController.text);
     final price = tryParsePrice(_priceController.text);
     if (category == null ||
-        (!_apiCreate && branchId == null) ||
+        (!_usesApi && branchId == null) ||
         duration == null ||
         price == null) {
       setState(() => _validateOnInteraction = true);
@@ -148,7 +157,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     final description = _descriptionController.text.trim();
     final existing = widget.service;
 
-    if (_apiCreate) {
+    if (_usesApi) {
       final matches = _categories.where((item) => item.categoryName == category);
       if (matches.isEmpty) {
         setState(() => _saveError = 'Category is required');
@@ -159,17 +168,36 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
         _saveError = null;
       });
       try {
-        final created = await _services.create(
-          serviceCategoryId: matches.first.serviceCategoryId,
-          serviceName: name,
-          description: description,
-          durationMinutes: duration,
-          price: price,
-          categoryName: category,
-        );
+        final categoryId = matches.first.serviceCategoryId;
+        final SalonService saved;
+        if (existing == null) {
+          saved = await _services.create(
+            serviceCategoryId: categoryId,
+            serviceName: name,
+            description: description,
+            durationMinutes: duration,
+            price: price,
+            categoryName: category,
+          );
+        } else {
+          saved = await _services.update(
+            existing.copyWith(
+              serviceCategoryId: categoryId,
+              categoryName: category,
+              serviceName: name,
+              description: description,
+              durationMinutes: duration,
+              price: price,
+              isActive: _isActive,
+            ),
+          );
+        }
         if (!mounted) return;
-        AppSnackBar.success(context, '${created.serviceName} was saved.');
-        Navigator.of(context).pop(created);
+        AppSnackBar.success(
+          context,
+          existing == null ? '${saved.serviceName} was saved.' : '$name was updated.',
+        );
+        Navigator.of(context).pop(saved);
       } on ApiException catch (error) {
         if (!mounted) return;
         setState(() {
@@ -233,10 +261,10 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           final padding = constraints.maxWidth < 520 ? 16.0 : 24.0;
-          if (_apiCreate && _loadingCategories) {
+          if (_usesApi && _loadingCategories) {
             return const Center(child: CircularProgressIndicator());
           }
-          if (_apiCreate && _categoryError != null) {
+          if (_usesApi && _categoryError != null) {
             return Center(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -304,7 +332,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
                                     descriptionController:
                                         _descriptionController,
                                     category: _category,
-                                    categories: _apiCreate
+                                    categories: _usesApi
                                         ? {
                                             for (final item in _categories)
                                               item.categoryName,
@@ -313,7 +341,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
                                     onCategoryChanged: (value) {
                                       setState(() => _category = value);
                                     },
-                                    showBranch: !_apiCreate,
+                                    showBranch: !_usesApi,
                                     branchId: _branchId,
                                     branches: mockBranches,
                                     onBranchChanged: (value) {

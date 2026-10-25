@@ -27,6 +27,8 @@ class SalonService {
   final String serviceName;
   final int durationMinutes;
   final double price;
+  final double cost;
+  final double commissionPercentage;
   final int branchId;
   final int serviceCategoryId;
   final String categoryName;
@@ -40,6 +42,8 @@ class SalonService {
     required this.serviceName,
     required this.durationMinutes,
     required this.price,
+    this.cost = 0,
+    this.commissionPercentage = 0,
     required this.branchId,
     this.serviceCategoryId = 0,
     required this.categoryName,
@@ -72,6 +76,8 @@ class SalonService {
     String? serviceName,
     int? durationMinutes,
     double? price,
+    double? cost,
+    double? commissionPercentage,
     int? branchId,
     int? serviceCategoryId,
     String? categoryName,
@@ -85,6 +91,8 @@ class SalonService {
       serviceName: serviceName ?? this.serviceName,
       durationMinutes: durationMinutes ?? this.durationMinutes,
       price: price ?? this.price,
+      cost: cost ?? this.cost,
+      commissionPercentage: commissionPercentage ?? this.commissionPercentage,
       branchId: branchId ?? this.branchId,
       serviceCategoryId: serviceCategoryId ?? this.serviceCategoryId,
       categoryName: categoryName ?? this.categoryName,

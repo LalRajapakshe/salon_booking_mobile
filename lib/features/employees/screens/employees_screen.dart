@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../shared/widgets/app_dialog.dart';
+import '../../../shared/widgets/app_snackbar.dart';
 import '../../services/data/service_repository.dart';
 import '../data/employee_capability_repository.dart';
 import '../data/employee_repository.dart';
@@ -89,6 +91,67 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
       ),
     );
     if (saved == true && _repository.isApiBacked) await _load();
+  }
+
+  Future<void> _view(EmployeeRecord employee) {
+    String date(DateTime? value) {
+      if (value == null) return '—';
+      final month = value.month.toString().padLeft(2, '0');
+      final day = value.day.toString().padLeft(2, '0');
+      return '${value.year}-$month-$day';
+    }
+
+    return AppDialog.showDetails(
+      context: context,
+      title: employee.fullName,
+      rows: [
+        (label: 'Code', value: employee.employeeCode),
+        (label: 'Mobile', value: employee.mobileNo),
+        (label: 'Email', value: employee.email ?? '—'),
+        (label: 'Gender', value: employee.gender ?? '—'),
+        (label: 'Birth date', value: date(employee.dateOfBirth)),
+        (label: 'Address', value: employee.address ?? '—'),
+        (label: 'Designation', value: employee.designation ?? '—'),
+        (label: 'Hire date', value: date(employee.hireDate)),
+        (label: 'Salary', value: employee.salary.toStringAsFixed(2)),
+        (label: 'Status', value: employee.isActive ? 'Active' : 'Inactive'),
+      ],
+    );
+  }
+
+  Future<void> _openEdit(EmployeeRecord employee) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateEmployeeScreen(
+          repository: _repository,
+          employee: employee,
+        ),
+      ),
+    );
+    if (saved == true && _repository.isApiBacked) await _load();
+  }
+
+  Future<void> _confirmDelete(EmployeeRecord employee) async {
+    final confirmed = await AppDialog.show(
+      context: context,
+      title: 'Delete Employee?',
+      message: 'Hide ${employee.fullName} from the list?\n\nThe record stays stored.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      icon: Icons.delete_outline,
+      iconColor: Colors.red,
+    );
+    if (!mounted || confirmed != true) return;
+    try {
+      await _repository.delete(employee.id);
+      if (!mounted) return;
+      AppSnackBar.success(context, '${employee.fullName} was deleted.');
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
   }
 
   Future<void> _openAssign() async {
@@ -201,6 +264,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
             DataColumn(label: Text('Name')),
             DataColumn(label: Text('Mobile')),
             DataColumn(label: Text('Designation')),
+            DataColumn(label: Text('')),
           ],
           rows: [
             for (final employee in employees)
@@ -210,6 +274,27 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                   DataCell(Text(employee.fullName)),
                   DataCell(Text(employee.mobileNo)),
                   DataCell(Text(employee.designation ?? '')),
+                  DataCell(
+                    PopupMenuButton<String>(
+                      key: ValueKey('employee-actions-${employee.id}'),
+                      tooltip: 'Actions',
+                      onSelected: (action) {
+                        switch (action) {
+                          case 'view':
+                            _view(employee);
+                          case 'edit':
+                            _openEdit(employee);
+                          case 'delete':
+                            _confirmDelete(employee);
+                        }
+                      },
+                      itemBuilder: (context) => const [
+                        PopupMenuItem(value: 'view', child: Text('View')),
+                        PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'delete', child: Text('Delete')),
+                      ],
+                    ),
+                  ),
                 ],
               ),
           ],

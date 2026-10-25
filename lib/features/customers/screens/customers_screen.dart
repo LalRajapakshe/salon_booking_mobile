@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../shared/widgets/app_dialog.dart';
+import '../../../shared/widgets/app_snackbar.dart';
 import '../data/customer_repository.dart';
 import '../models/customer_model.dart';
 import '../widgets/customer_avatar.dart';
@@ -681,16 +683,16 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 onSelected: (action) {
                   switch (action) {
                     case 'view':
-                      // TODO: Connect to Customer Details screen.
+                      _view(customer);
                       break;
                     case 'edit':
-                      // TODO: Connect to Customer Edit form.
+                      _openEdit(customer);
                       break;
                     case 'photo':
                       _editPhoto(customer);
                       break;
                     case 'delete':
-                      // TODO: Connect to Delete confirmation.
+                      _confirmDelete(customer);
                       break;
                   }
                 },
@@ -747,6 +749,82 @@ class _CustomersScreenState extends State<CustomersScreen> {
         );
       }).toList(),
     );
+  }
+
+  Future<void> _view(Customer customer) {
+    String date(DateTime? value) {
+      if (value == null) return '—';
+      final month = value.month.toString().padLeft(2, '0');
+      final day = value.day.toString().padLeft(2, '0');
+      return '${value.year}-$month-$day';
+    }
+
+    return AppDialog.showDetails(
+      context: context,
+      title: customer.fullName,
+      rows: [
+        (label: 'Code', value: customer.customerCode),
+        (label: 'Mobile', value: customer.mobileNumber),
+        (label: 'Email', value: customer.email ?? '—'),
+        (label: 'Gender', value: customer.gender ?? '—'),
+        (label: 'Birth date', value: date(customer.dateOfBirth)),
+        (label: 'Notes', value: customer.notes ?? '—'),
+        (label: 'Status', value: customer.isActive ? 'Active' : 'Inactive'),
+      ],
+    );
+  }
+
+  Future<void> _openEdit(Customer customer) async {
+    final saved = await Navigator.push<Object?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateCustomerScreen(
+          repository: _repository,
+          customer: customer,
+        ),
+      ),
+    );
+    if (!mounted) return;
+    if (saved == true && _repository.isApiBacked) {
+      await _load();
+      return;
+    }
+    if (saved is Customer) {
+      setState(() {
+        final index = _customers.indexWhere((item) => item.id == saved.id);
+        if (index >= 0) _customers[index] = saved;
+      });
+    }
+  }
+
+  Future<void> _confirmDelete(Customer customer) async {
+    final confirmed = await AppDialog.show(
+      context: context,
+      title: 'Delete Customer?',
+      message: _repository.isApiBacked
+          ? 'Hide ${customer.fullName} from the list?\n\nThe record stays stored.'
+          : 'Remove ${customer.fullName} from this list?',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      icon: Icons.delete_outline,
+      iconColor: Colors.red,
+    );
+    if (!mounted || confirmed != true) return;
+    if (_repository.isApiBacked) {
+      try {
+        await _repository.delete(customer.id);
+        if (!mounted) return;
+        AppSnackBar.success(context, '${customer.fullName} was deleted.');
+        await _load();
+      } on ApiException catch (error) {
+        if (!mounted) return;
+        AppSnackBar.error(context, error.message);
+      }
+      return;
+    }
+    setState(() {
+      _customers.removeWhere((item) => item.id == customer.id);
+    });
   }
 
   Future<void> _editPhoto(Customer customer) async {

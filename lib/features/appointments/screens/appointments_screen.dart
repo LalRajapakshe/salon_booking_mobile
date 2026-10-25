@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../shared/utils/date_formatter.dart';
+import '../../../shared/widgets/app_dialog.dart';
+import '../../../shared/widgets/app_snackbar.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../services/data/service_repository.dart';
 import '../data/appointment_repository.dart';
@@ -162,6 +164,63 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   String _dateLabel(String key) {
     if (key == 'All') return 'All';
     return DateFormatter.format(DateTime.parse(key));
+  }
+
+  Future<void> _view(Appointment appointment) {
+    final notes = appointment.notes?.trim();
+    return AppDialog.showDetails(
+      context: context,
+      title: _customerLabel(appointment),
+      rows: [
+        (label: 'Date', value: DateFormatter.format(appointment.appointmentDate)),
+        (label: 'Status', value: appointment.status.label),
+        (label: 'Employee', value: _employeeLabel(appointment)),
+        (label: 'Services', value: _serviceLabel(appointment)),
+        (
+          label: 'Start',
+          value: appointment.hasScheduledTime ? formatAppointmentTime(appointment.startTime) : '—',
+        ),
+        (
+          label: 'End',
+          value: appointment.hasScheduledTime ? formatAppointmentTime(appointment.endTime) : '—',
+        ),
+        (label: 'Notes', value: notes == null || notes.isEmpty ? '—' : notes),
+        if (!appointment.canEdit)
+          (
+            label: 'Edit',
+            value: appointment.slotAllocated && !appointment.customerConfirmed
+                ? 'Closed. A time slot is already allocated.'
+                : 'Closed. The customer confirmation is already done.',
+          ),
+      ],
+    );
+  }
+
+  Future<void> _openEdit(Appointment appointment) async {
+    if (!appointment.canEdit) {
+      AppSnackBar.info(
+        context,
+        appointment.slotAllocated && !appointment.customerConfirmed
+            ? 'Edit stays closed after a time slot is allocated.'
+            : 'Edit stays open only before the customer confirms.',
+      );
+      return;
+    }
+
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CreateAppointmentScreen(
+          repository: _repository,
+          availabilityRepository: _availabilityRepository,
+          customers: _customers,
+          services: _services,
+          liveLookups: _liveLookups,
+          appointment: appointment,
+        ),
+      ),
+    );
+    if (saved == true && mounted) await _load();
   }
 
   @override
@@ -481,23 +540,26 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                   onSelected: (action) {
                     switch (action) {
                       case 'view':
+                        _view(appointment);
                       case 'edit':
+                        _openEdit(appointment);
                       case 'delete':
                         break;
                     }
                   },
-                  itemBuilder: (context) => const [
-                    PopupMenuItem<String>(
+                  itemBuilder: (context) => [
+                    const PopupMenuItem<String>(
                       value: 'view',
                       child: Text('View'),
                     ),
                     PopupMenuItem<String>(
                       value: 'edit',
-                      child: Text('Edit'),
+                      enabled: appointment.canEdit,
+                      child: const Text('Edit'),
                     ),
-                    PopupMenuItem<String>(
+                    const PopupMenuItem<String>(
                       value: 'delete',
-                      child: Text('Delete'),
+                      child: const Text('Delete'),
                     ),
                   ],
                 ),

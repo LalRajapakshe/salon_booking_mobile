@@ -17,15 +17,19 @@ import '../widgets/customer_photo_field.dart';
 
 class CreateCustomerScreen extends StatefulWidget {
   final CustomerRepository? repository;
+  final Customer? customer;
   final Future<Uint8List?> Function()? choosePhoto;
   final Future<Uint8List?> Function()? takePhoto;
 
   const CreateCustomerScreen({
     super.key,
     this.repository,
+    this.customer,
     this.choosePhoto,
     this.takePhoto,
   });
+
+  bool get isEditing => customer != null;
 
   @override
   State<CreateCustomerScreen> createState() => _CreateCustomerScreenState();
@@ -65,6 +69,20 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? CustomerRepository();
+    final customer = widget.customer;
+    if (customer != null) {
+      _savedCustomerId = customer.id;
+      _customerCodeController.text = customer.customerCode;
+      _firstNameController.text = customer.firstName;
+      _lastNameController.text = customer.lastName;
+      _mobileNumberController.text = customer.mobileNumber;
+      _emailController.text = customer.email ?? '';
+      _addressController.text = customer.address ?? '';
+      _notesController.text = customer.notes ?? '';
+      _gender = _genderOptions.contains(customer.gender) ? customer.gender : null;
+      _dateOfBirth = customer.dateOfBirth;
+      _isActive = customer.isActive;
+    }
   }
 
   @override
@@ -104,9 +122,31 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
         _saveError = null;
       });
       try {
-        var savedId = _savedCustomerId;
+        var savedId = widget.customer == null ? _savedCustomerId : widget.customer!.id;
         var savedName = '${_firstNameController.text.trim()} ${_lastNameController.text.trim()}';
-        if (savedId == null) {
+        if (widget.customer != null) {
+          final current = widget.customer!;
+          final updated = await _repository.update(
+            Customer(
+              id: current.id,
+              customerCode: current.customerCode,
+              firstName: _firstNameController.text.trim(),
+              lastName: _lastNameController.text.trim(),
+              mobileNumber: _mobileNumberController.text.trim(),
+              email: _emptyToNull(_emailController.text),
+              gender: _gender,
+              dateOfBirth: _dateOfBirth,
+              address: _emptyToNull(_addressController.text),
+              notes: _emptyToNull(_notesController.text),
+              photoPath: current.photoPath,
+              isActive: _isActive,
+              branchId: current.branchId,
+              createdDate: current.createdDate,
+            ),
+          );
+          savedId = updated.id;
+          savedName = updated.fullName;
+        } else if (savedId == null) {
           final created = await _repository.create(
             firstName: _firstNameController.text,
             lastName: _lastNameController.text,
@@ -149,9 +189,10 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
     }
 
     // Signed-out save stays on this device. The server assigns id and code.
+    final existing = widget.customer;
     final customer = Customer(
-      id: 0,
-      customerCode: _customerCodeController.text.trim(),
+      id: existing?.id ?? 0,
+      customerCode: existing?.customerCode ?? _customerCodeController.text.trim(),
       firstName: _firstNameController.text.trim(),
       lastName: _lastNameController.text.trim(),
       mobileNumber: _mobileNumberController.text.trim(),
@@ -161,11 +202,15 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
       address: _emptyToNull(_addressController.text),
       notes: _emptyToNull(_notesController.text),
       isActive: _isActive,
-      createdDate: DateTime.now(),
+      branchId: existing?.branchId ?? 0,
+      createdDate: existing?.createdDate ?? DateTime.now(),
     );
 
-    AppSnackBar.success(context, '${customer.fullName} was saved.');
-    Navigator.of(context).pop();
+    AppSnackBar.success(
+      context,
+      existing == null ? '${customer.fullName} was saved.' : '${customer.fullName} was updated.',
+    );
+    Navigator.of(context).pop(existing == null ? null : customer);
   }
 
   String? _emptyToNull(String value) {
@@ -202,9 +247,9 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
       backgroundColor: const Color(0xffF4F6FA),
       appBar: AppBar(
         elevation: 0,
-        title: const Text(
-          'Create Customer',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          widget.isEditing ? 'Edit Customer' : 'Create Customer',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       body: LayoutBuilder(
@@ -241,17 +286,19 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
   }
 
   Widget _buildHeader() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Create Customer',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          widget.isEditing ? 'Edit Customer' : 'Create Customer',
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 6),
+        const SizedBox(height: 6),
         Text(
-          'Enter customer details and save the record',
-          style: TextStyle(color: Colors.grey, fontSize: 14),
+          widget.isEditing
+              ? 'Code ${widget.customer!.customerCode} stays the same'
+              : 'Enter customer details and save the record',
+          style: const TextStyle(color: Colors.grey, fontSize: 14),
         ),
       ],
     );
@@ -397,12 +444,12 @@ class _CreateCustomerScreenState extends State<CreateCustomerScreen> {
                   contentPadding: EdgeInsets.zero,
                   title: const Text('Active'),
                   subtitle: Text(
-                    _apiBacked
+                    _apiBacked && !widget.isEditing
                         ? 'A new customer is saved as active'
                         : 'Customer is active',
                   ),
-                  value: _apiBacked ? true : _isActive,
-                  onChanged: _apiBacked
+                  value: _apiBacked && !widget.isEditing ? true : _isActive,
+                  onChanged: _apiBacked && !widget.isEditing
                       ? null
                       : (value) => setState(() => _isActive = value),
                 ),

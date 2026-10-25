@@ -62,6 +62,36 @@ class CustomerRepository {
     return created;
   }
 
+  /// `PUT /api/Customers/{id}`. The customer code is left unchanged.
+  Future<Customer> update(Customer customer) async {
+    final body = <String, dynamic>{
+      'firstName': customer.firstName.trim(),
+      'lastName': customer.lastName.trim(),
+      'mobileNo': customer.mobileNumber.trim(),
+      'isActive': customer.isActive,
+      'branchId': customer.branchId,
+    };
+    final email = customer.email?.trim();
+    if (email != null && email.isNotEmpty) body['email'] = email;
+    final gender = customer.gender?.trim();
+    if (gender != null && gender.isNotEmpty) body['gender'] = gender;
+    if (customer.dateOfBirth != null) {
+      body['dateOfBirth'] = _dateOnly(customer.dateOfBirth!);
+    }
+    final remarks = customer.notes?.trim();
+    if (remarks != null && remarks.isNotEmpty) body['remarks'] = remarks;
+
+    return CustomerApiMapper.customer(
+      await _client.putJson('/api/Customers/${customer.id}', body),
+    );
+  }
+
+  /// `DELETE /api/Customers/{id}` marks the row deleted. It stays in the database.
+  Future<void> delete(int customerId) async {
+    await _client.deleteJson('/api/Customers/$customerId');
+    photos.forget(customerId);
+  }
+
   /// `POST /api/Customers/{id}/photo`. The server stores the file and returns the customer.
   Future<Customer> uploadPhoto(int customerId, List<int> bytes) async {
     final saved = CustomerApiMapper.customer(

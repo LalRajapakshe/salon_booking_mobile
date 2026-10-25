@@ -6,10 +6,12 @@ import '../../../shared/widgets/app_dropdown.dart';
 import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
+import '../../../shared/widgets/app_text_field.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../services/data/service_repository.dart';
 import '../data/appointment_repository.dart';
 import '../data/availability_repository.dart';
+import '../models/appointment.dart';
 import '../models/appointment_service_draft.dart';
 import '../models/appointment_service_line.dart';
 import '../models/appointment_status.dart';
@@ -28,6 +30,7 @@ class CreateAppointmentScreen extends StatefulWidget {
     this.services,
     this.liveLookups = false,
     this.initialCustomerId,
+    this.appointment,
   });
 
   final AppointmentRepository? repository;
@@ -41,6 +44,11 @@ class CreateAppointmentScreen extends StatefulWidget {
   /// Prefills the customer when the receptionist continues from walk-in registration.
   final int? initialCustomerId;
 
+  /// Opens the same form for an appointment that is still pending and unscheduled.
+  final Appointment? appointment;
+
+  bool get isEditing => appointment != null;
+
   @override
   State<CreateAppointmentScreen> createState() => _CreateAppointmentScreenState();
 }
@@ -48,6 +56,7 @@ class CreateAppointmentScreen extends StatefulWidget {
 class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   final ScrollController _scrollController = ScrollController();
+  final TextEditingController _notesController = TextEditingController();
 
   int? _customerId;
   DateTime? _appointmentDate;
@@ -59,6 +68,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   bool _validateOnInteraction = false;
   bool _saving = false;
   int? _createdAppointmentId;
+  final Set<int> _removedLineIds = {};
   final Map<int, ServiceLineAvailability> _availability = {};
   late final AppointmentRepository _repository = widget.repository ?? AppointmentRepository();
   late final AvailabilityRepository _availabilityRepository =
@@ -70,7 +80,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   bool _loadingLookups = false;
   String? _lookupError;
 
-  bool get _structureLocked => _saving || _createdAppointmentId != null;
+  bool get _structureLocked => _saving || (!widget.isEditing && _createdAppointmentId != null);
 
   static const double _formMaxWidth = 1040;
   static const double _twoColumnBreakpoint = 640;
@@ -79,6 +89,36 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   void initState() {
     super.initState();
     _customerId = widget.initialCustomerId;
+    final existing = widget.appointment;
+    if (existing != null) {
+      _customerId = existing.customerId;
+      _appointmentDate = DateTime(
+        existing.appointmentDate.year,
+        existing.appointmentDate.month,
+        existing.appointmentDate.day,
+      );
+      _status = existing.status;
+      _notesController.text = existing.notes ?? '';
+      _createdAppointmentId = existing.appointmentId;
+      for (final line in existing.appointmentServices) {
+        if (line.isCancelled) continue;
+        _services.add(
+          AppointmentServiceDraft(
+            serviceId: line.serviceId,
+            employeeId: line.employeeId,
+            startTime: _timeOf(line.startTime),
+            endTime: _timeOf(line.endTime),
+            preferredStart: _timeOf(line.preferredStartTime),
+            preferredEnd: _timeOf(line.preferredEndTime),
+            appointmentServiceId: line.appointmentServiceId,
+            rowVersion: line.rowVersion,
+            durationMinutes: line.durationMinutes,
+            unitPrice: line.unitPrice,
+            scheduleSaved: line.isFullyScheduled,
+          ),
+        );
+      }
+    }
     if (widget.liveLookups) {
       _loadingLookups = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -122,7 +162,21 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         _loadingLookups = false;
         if (_customerId != null &&
             !_apiCustomers.any((item) => item.customerId == _customerId)) {
-          _customerId = null;
+          if (widget.isEditing) {
+            _apiCustomers = [
+              CustomerLookup(
+                customerId: _customerId!,
+                customerCode: '',
+                firstName: widget.appointment?.customerName ?? 'Customer',
+                lastName: widget.appointment?.customerName == null ? '$_customerId' : '',
+                mobileNo: '',
+                branchId: widget.appointment?.branchId ?? 0,
+              ),
+              ..._apiCustomers,
+            ];
+          } else {
+            _customerId = null;
+          }
         }
       });
     } on ApiException catch (error) {
@@ -137,7 +191,13 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _notesController.dispose();
     super.dispose();
+  }
+
+  TimeOfDay? _timeOf(DateTime? value) {
+    if (value == null) return null;
+    return TimeOfDay(hour: value.hour, minute: value.minute);
   }
 
   List<CustomerLookup> get _customers =>
@@ -399,8 +459,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
       _serviceError = servicesMissing ? 'Service is required' : null;
     });
 
-    if (_createdAppointmentId == null &&
-        (form == null || !form.validate() || servicesMissing)) {
+    if (form == null || !form.validate() || servicesMissing) {
       setState(() => _validateOnInteraction = true);
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -422,8 +481,11 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
 
     if (!_repository.isApiBacked) {
       final customer = AppointmentCatalog.customer(_customerId!);
-      AppSnackBar.success(context, '${customer.fullName} was saved.');
-      Navigator.of(context).pop();
+      AppSnackBar.success(
+        context,
+        widget.isEditing ? '${customer.fullName} was updated.' : '${customer.fullName} was saved.',
+      );
+      Navigator.of(context).pop(true);
       return;
     }
 
@@ -434,6 +496,21 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
 
     var phase = 'create';
     try {
+      if (widget.isEditing) {
+        phase = 'update';
+        await _repository.update(
+          appointmentId: _createdAppointmentId!,
+          appointmentDate: _appointmentDate!,
+          notes: _notesController.text,
+        );
+        phase = 'lines';
+        await _syncEditedServices();
+        if (!mounted) return;
+        AppSnackBar.success(context, '${_customerName(_customerId!)} was updated.');
+        Navigator.of(context).pop(true);
+        return;
+      }
+
       if (_createdAppointmentId == null) {
         final created = await _repository.create(
           customerId: _customerId!,
@@ -480,6 +557,8 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
         _saveError = switch (phase) {
           'schedule' => '${error.message} Save again to retry the service that was not scheduled.',
           'refresh' => '${error.message} Save again to reload the appointment.',
+          'update' => error.message,
+          'lines' when widget.isEditing => error.message,
           _ when created =>
             '${error.message} The appointment was created. Save again to add the remaining services.',
           _ => error.message,
@@ -498,6 +577,43 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
     if (!mounted) return;
     AppSnackBar.success(context, '${_customerName(_customerId!)} was saved.');
     Navigator.of(context).pop(true);
+  }
+
+  Future<void> _syncEditedServices() async {
+    final appointmentId = _createdAppointmentId!;
+    final kept = _services.map((line) => line.appointmentServiceId).whereType<int>().toSet();
+    final original = widget.appointment?.appointmentServices ?? const [];
+    for (final line in original) {
+      if (line.isCancelled || kept.contains(line.appointmentServiceId)) continue;
+      if (_removedLineIds.contains(line.appointmentServiceId)) continue;
+      final version = line.rowVersion;
+      if (version == null || version.isEmpty) {
+        throw const ApiException('A service line is missing its row version.');
+      }
+      await _repository.cancelService(
+        appointmentId: appointmentId,
+        appointmentServiceId: line.appointmentServiceId,
+        rowVersion: version,
+      );
+      _removedLineIds.add(line.appointmentServiceId);
+    }
+
+    for (var index = 0; index < _services.length; index++) {
+      final line = _services[index];
+      if (line.appointmentServiceId != null) continue;
+      final createdLine = await _repository.addService(
+        appointmentId: appointmentId,
+        serviceId: line.serviceId,
+        preferredStartTime: _clockOnAppointment(line.preferredStart),
+        preferredEndTime: _clockOnAppointment(line.preferredEnd),
+      );
+      _services[index] = line.copyWith(
+        appointmentServiceId: createdLine.appointmentServiceId,
+        rowVersion: createdLine.rowVersion,
+        durationMinutes: createdLine.durationMinutes,
+        unitPrice: createdLine.unitPrice,
+      );
+    }
   }
 
   String _customerName(int customerId) {
@@ -537,9 +653,9 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
       backgroundColor: const Color(0xffF4F6FA),
       appBar: AppBar(
         elevation: 0,
-        title: const Text(
-          'Create Appointment',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Text(
+          widget.isEditing ? 'Edit Appointment' : 'Create Appointment',
+          style: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       body: LayoutBuilder(
@@ -593,17 +709,19 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
   }
 
   Widget _buildHeader() {
-    return const Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Create Appointment',
-          style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+          widget.isEditing ? 'Edit Appointment' : 'Create Appointment',
+          style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 6),
+        const SizedBox(height: 6),
         Text(
-          'Record the customer and date, then add each service',
-          style: TextStyle(color: Colors.grey, fontSize: 14),
+          widget.isEditing
+              ? 'The customer stays the same. Date, notes, and services can change while it is still pending.'
+              : 'Record the customer and date, then add each service',
+          style: const TextStyle(color: Colors.grey, fontSize: 14),
         ),
       ],
     );
@@ -657,6 +775,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                   labelText: 'Customer',
                   hintText: 'Select customer',
                   value: _customerId,
+                  enabled: !widget.isEditing && !_structureLocked,
                   items: [
                     for (final customer in _customers)
                       DropdownMenuItem<int>(
@@ -665,7 +784,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                       ),
                   ],
                   onChanged: (value) {
-                    if (_structureLocked) return;
+                    if (_structureLocked || widget.isEditing) return;
                     setState(() => _customerId = value);
                   },
                   validator: (value) => _requiredSelection(value, 'Customer'),
@@ -673,6 +792,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                 second: AppDropdown<AppointmentStatus>(
                   labelText: 'Status',
                   value: _status,
+                  enabled: !widget.isEditing && !_structureLocked,
                   items: [
                     for (final status in AppointmentStatus.values)
                       DropdownMenuItem<AppointmentStatus>(
@@ -681,7 +801,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                       ),
                   ],
                   onChanged: (value) {
-                    if (_structureLocked || value == null) return;
+                    if (_structureLocked || widget.isEditing || value == null) return;
                     setState(() => _status = value);
                   },
                 ),
@@ -694,6 +814,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                   setState(() {
                     _appointmentDate = date;
                     _availability.clear();
+                    if (widget.isEditing) return;
                     for (var index = 0; index < _services.length; index++) {
                       _services[index] = _services[index].copyWith(
                         employeeId: null,
@@ -708,6 +829,16 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
                 },
                 validator: _dateValidator,
               ),
+              if (widget.isEditing) ...[
+                const SizedBox(height: 16),
+                AppTextField(
+                  controller: _notesController,
+                  labelText: 'Notes',
+                  maxLines: 3,
+                  keyboardType: TextInputType.multiline,
+                  textInputAction: TextInputAction.newline,
+                ),
+              ],
             ],
           );
         },
@@ -802,6 +933,7 @@ class _CreateAppointmentScreenState extends State<CreateAppointmentScreen> {
           onSelectSlot: _selectSlot,
           onClearSchedule: _clearSchedule,
           serviceLookup: widget.liveLookups ? _serviceById : null,
+          showScheduling: !widget.isEditing,
         ),
         if (_serviceError != null) ...[
           const SizedBox(height: 8),

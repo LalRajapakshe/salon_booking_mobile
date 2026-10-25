@@ -34,6 +34,7 @@ class SelectedServiceList extends StatelessWidget {
   final void Function(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) onSelectSlot;
   final ValueChanged<int> onClearSchedule;
   final ServiceLookup Function(int serviceId)? serviceLookup;
+  final bool showScheduling;
 
   const SelectedServiceList({
     super.key,
@@ -47,6 +48,7 @@ class SelectedServiceList extends StatelessWidget {
     required this.onSelectSlot,
     required this.onClearSchedule,
     this.serviceLookup,
+    this.showScheduling = true,
   });
 
   @override
@@ -70,6 +72,7 @@ class SelectedServiceList extends StatelessWidget {
             onSelectSlot: onSelectSlot,
             onClearSchedule: onClearSchedule,
             serviceLookup: serviceLookup,
+            showScheduling: showScheduling,
           ),
         ],
       ],
@@ -88,6 +91,7 @@ class _ServiceCard extends StatelessWidget {
   final void Function(int serviceId, EmployeeAvailability employee, AvailabilitySlot slot) onSelectSlot;
   final ValueChanged<int> onClearSchedule;
   final ServiceLookup Function(int serviceId)? serviceLookup;
+  final bool showScheduling;
 
   const _ServiceCard({
     required this.line,
@@ -100,6 +104,7 @@ class _ServiceCard extends StatelessWidget {
     required this.onSelectSlot,
     required this.onClearSchedule,
     this.serviceLookup,
+    required this.showScheduling,
   });
 
   @override
@@ -159,17 +164,19 @@ class _ServiceCard extends StatelessWidget {
               Text(preferred, style: const TextStyle(fontSize: 13)),
               const SizedBox(height: 4),
             ],
-            Text(schedule, style: const TextStyle(fontSize: 13)),
-            if (line.hasSchedule)
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton(
-                  onPressed: enabled ? () => onClearSchedule(line.serviceId) : null,
-                  child: const Text('Clear time'),
+            if (showScheduling) ...[
+              Text(schedule, style: const TextStyle(fontSize: 13)),
+              if (line.hasSchedule)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: enabled ? () => onClearSchedule(line.serviceId) : null,
+                    child: const Text('Clear time'),
+                  ),
                 ),
-              ),
-            const SizedBox(height: 4),
-            _availabilityBody(context),
+              const SizedBox(height: 4),
+              _availabilityBody(context),
+            ],
           ],
         ),
       ),

@@ -116,13 +116,13 @@ void main() {
   testWidgets('unimplemented modules show a coming soon message', (tester) async {
     await pumpDashboard(tester, const Size(1440, 2400));
 
-    final branch = find.widgetWithText(QuickActionCard, 'Branch');
-    await tester.ensureVisible(branch);
-    await tester.tap(branch);
+    final inventory = find.widgetWithText(QuickActionCard, 'Inventory');
+    await tester.ensureVisible(inventory);
+    await tester.tap(inventory);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(find.text('Branch is coming soon.'), findsOneWidget);
+    expect(find.text('Inventory is coming soon.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

@@ -64,6 +64,40 @@ class EmployeeRepository {
     return created;
   }
 
+  /// `PUT /api/Employees/{id}`. The employee code is left unchanged.
+  Future<EmployeeRecord> update(EmployeeRecord employee) async {
+    final hireDate = employee.hireDate;
+    if (hireDate == null) {
+      throw const ApiException('Hire date is required.');
+    }
+    final body = <String, dynamic>{
+      'branchId': employee.branchId,
+      'firstName': employee.firstName.trim(),
+      'lastName': employee.lastName.trim(),
+      'mobileNo': employee.mobileNo.trim(),
+      'designation': (employee.designation ?? '').trim(),
+      'hireDate': _dateOnly(hireDate),
+      'salary': employee.salary,
+      'isActive': employee.isActive,
+    };
+    final email = employee.email?.trim();
+    if (email != null && email.isNotEmpty) body['email'] = email;
+    final gender = employee.gender?.trim();
+    if (gender != null && gender.isNotEmpty) body['gender'] = gender;
+    if (employee.dateOfBirth != null) body['dateOfBirth'] = _dateOnly(employee.dateOfBirth!);
+    final address = employee.address?.trim();
+    if (address != null && address.isNotEmpty) body['address'] = address;
+
+    return EmployeeApiMapper.employee(
+      await _client.putJson('/api/Employees/${employee.id}', body),
+    );
+  }
+
+  /// `DELETE /api/Employees/{id}` marks the row deleted. It stays in the database.
+  Future<void> delete(int employeeId) {
+    return _client.deleteJson('/api/Employees/$employeeId');
+  }
+
   static String _dateOnly(DateTime value) {
     final year = value.year.toString().padLeft(4, '0');
     final month = value.month.toString().padLeft(2, '0');

@@ -8,11 +8,21 @@ class AccessTokenClaims {
   const AccessTokenClaims._();
 
   static int? branchId(String? token) {
-    final payload = _payload(token);
-    if (payload == null) return null;
-    final value = _int(payload['BranchId']);
+    final value = _claim(token, 'BranchId');
     if (value == null || value <= 0) return null;
     return value;
+  }
+
+  static int? tenantId(String? token) {
+    final value = _claim(token, 'TenantId');
+    if (value == null || value <= 0) return null;
+    return value;
+  }
+
+  static int? _claim(String? token, String name) {
+    final payload = _payload(token);
+    if (payload == null) return null;
+    return _int(payload[name]);
   }
 
   static Map<String, dynamic>? _payload(String? token) {

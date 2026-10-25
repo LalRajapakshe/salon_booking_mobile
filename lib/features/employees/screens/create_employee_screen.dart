@@ -9,11 +9,15 @@ import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/app_text_field.dart';
 import '../data/employee_repository.dart';
+import '../models/employee_record.dart';
 
 class CreateEmployeeScreen extends StatefulWidget {
   final EmployeeRepository? repository;
+  final EmployeeRecord? employee;
 
-  const CreateEmployeeScreen({super.key, this.repository});
+  const CreateEmployeeScreen({super.key, this.repository, this.employee});
+
+  bool get isEditing => employee != null;
 
   @override
   State<CreateEmployeeScreen> createState() => _CreateEmployeeScreenState();
@@ -35,6 +39,7 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
   DateTime? _hireDate;
   bool _saving = false;
   bool _validateOnInteraction = false;
+  bool _isActive = true;
   String? _saveError;
 
   static const List<String> _genders = ['Female', 'Male', 'Other'];
@@ -43,6 +48,20 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
   void initState() {
     super.initState();
     _repository = widget.repository ?? EmployeeRepository();
+    final employee = widget.employee;
+    if (employee != null) {
+      _firstNameController.text = employee.firstName;
+      _lastNameController.text = employee.lastName;
+      _mobileController.text = employee.mobileNo;
+      _emailController.text = employee.email ?? '';
+      _addressController.text = employee.address ?? '';
+      _designationController.text = employee.designation ?? '';
+      _salaryController.text = employee.salary.toString();
+      _gender = _genders.contains(employee.gender) ? employee.gender : null;
+      _dateOfBirth = employee.dateOfBirth;
+      _hireDate = employee.hireDate;
+      _isActive = employee.isActive;
+    }
   }
 
   @override
@@ -105,20 +124,45 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
       _saveError = null;
     });
     try {
-      final created = await _repository.create(
-        firstName: _firstNameController.text,
-        lastName: _lastNameController.text,
-        mobileNo: _mobileController.text,
-        designation: _designationController.text,
-        hireDate: _hireDate!,
-        salary: double.parse(_salaryController.text.trim().replaceAll(',', '')),
-        email: _emptyToNull(_emailController.text),
-        gender: _gender,
-        dateOfBirth: _dateOfBirth,
-        address: _emptyToNull(_addressController.text),
-      );
+      final salary = double.parse(_salaryController.text.trim().replaceAll(',', ''));
+      final editing = widget.employee;
+      final saved = editing == null
+          ? await _repository.create(
+              firstName: _firstNameController.text,
+              lastName: _lastNameController.text,
+              mobileNo: _mobileController.text,
+              designation: _designationController.text,
+              hireDate: _hireDate!,
+              salary: salary,
+              email: _emptyToNull(_emailController.text),
+              gender: _gender,
+              dateOfBirth: _dateOfBirth,
+              address: _emptyToNull(_addressController.text),
+            )
+          : await _repository.update(
+              EmployeeRecord(
+                id: editing.id,
+                employeeCode: editing.employeeCode,
+                firstName: _firstNameController.text.trim(),
+                lastName: _lastNameController.text.trim(),
+                mobileNo: _mobileController.text.trim(),
+                email: _emptyToNull(_emailController.text),
+                gender: _gender,
+                dateOfBirth: _dateOfBirth,
+                address: _emptyToNull(_addressController.text),
+                hireDate: _hireDate,
+                designation: _designationController.text.trim(),
+                salary: salary,
+                isActive: _isActive,
+                createdDate: editing.createdDate,
+                branchId: editing.branchId,
+              ),
+            );
       if (!mounted) return;
-      AppSnackBar.success(context, '${created.fullName} was saved.');
+      AppSnackBar.success(
+        context,
+        editing == null ? '${saved.fullName} was saved.' : '${saved.fullName} was updated.',
+      );
       Navigator.of(context).pop(true);
     } on ApiException catch (error) {
       if (!mounted) return;
@@ -135,7 +179,10 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
       backgroundColor: const Color(0xffF4F6FA),
       appBar: AppBar(
         elevation: 0,
-        title: const Text('Create Employee', style: TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.isEditing ? 'Edit Employee' : 'Create Employee',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
       ),
       body: Form(
         key: _formKey,
@@ -145,14 +192,16 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(24),
           children: [
-            const Text(
-              'Create Employee',
-              style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+            Text(
+              widget.isEditing ? 'Edit Employee' : 'Create Employee',
+              style: const TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 6),
-            const Text(
-              'The employee code is assigned when the record is saved',
-              style: TextStyle(color: Colors.grey, fontSize: 14),
+            Text(
+              widget.isEditing
+                  ? 'Code ${widget.employee!.employeeCode} stays the same'
+                  : 'The employee code is assigned when the record is saved',
+              style: const TextStyle(color: Colors.grey, fontSize: 14),
             ),
             const SizedBox(height: 24),
             AppTextField(
@@ -239,6 +288,15 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               validator: _salary,
             ),
+            if (widget.isEditing) ...[
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Active'),
+                value: _isActive,
+                onChanged: (value) => setState(() => _isActive = value),
+              ),
+            ],
             if (_saveError != null) ...[
               const SizedBox(height: 12),
               Text(_saveError!, style: const TextStyle(color: Colors.red)),

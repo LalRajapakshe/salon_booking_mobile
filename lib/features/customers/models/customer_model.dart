@@ -11,6 +11,7 @@ class Customer {
   final String? notes;
   final String? photoPath;
   final bool isActive;
+  final int branchId;
   final DateTime createdDate;
 
   const Customer({
@@ -26,6 +27,7 @@ class Customer {
     this.notes,
     this.photoPath,
     this.isActive = true,
+    this.branchId = 0,
     required this.createdDate
     //, required String name, required String phone, required int visits, required String lastVisit, required String membership, required String status,
   });
@@ -47,6 +49,7 @@ class Customer {
     String? notes,
     String? photoPath,
     bool? isActive,
+    int? branchId,
     DateTime? createdDate,
   }) {
     return Customer(
@@ -62,6 +65,7 @@ class Customer {
       notes: notes ?? this.notes,
       photoPath: photoPath ?? this.photoPath,
       isActive: isActive ?? this.isActive,
+      branchId: branchId ?? this.branchId,
       createdDate: createdDate ?? this.createdDate,
     );
   }
