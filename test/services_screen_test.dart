@@ -159,7 +159,10 @@ void main() {
     expect(field('Price (Rs.)'), findsOneWidget);
     expect(field('Description'), findsOneWidget);
     expect(find.text('Active'), findsOneWidget);
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(
+      tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Active')).value,
+      isTrue,
+    );
     expectNoExceptions(tester);
   });
 
@@ -287,7 +290,10 @@ void main() {
       'Hair',
     );
     expect(tester.state<FormFieldState<int>>(dropdown<int>('Branch')).value, 1);
-    expect(tester.widget<Switch>(find.byType(Switch)).value, isTrue);
+    expect(
+      tester.widget<SwitchListTile>(find.widgetWithText(SwitchListTile, 'Active')).value,
+      isTrue,
+    );
     expectNoExceptions(tester);
   });
 

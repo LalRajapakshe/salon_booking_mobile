@@ -4,7 +4,10 @@ import '../../../core/api/api_exception.dart';
 import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
+import '../../../shared/widgets/catalogue_photo_editor.dart';
 import '../../appointments/data/mock_appointment_data.dart';
+import '../../appointments/models/salon_lookups.dart';
+import '../../branches/data/branch_repository.dart';
 import '../api/service_api_mapper.dart';
 import '../data/service_directory.dart';
 import '../data/service_repository.dart';
@@ -43,6 +46,9 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
   String? _category;
   int? _branchId;
   bool _isActive = true;
+  bool _isCustomerVisible = false;
+  bool _isPopular = false;
+  List<BranchLookup> _apiBranches = const [];
   bool _validateOnInteraction = false;
   bool _saving = false;
   String? _saveError;
@@ -75,6 +81,8 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       _category = service.categoryName;
       _branchId = service.branchId;
       _isActive = service.isActive;
+      _isCustomerVisible = service.isCustomerVisible;
+      _isPopular = service.isPopular;
     } else if (mockBranches.isNotEmpty) {
       _branchId = mockBranches.first.branchId;
     }
@@ -102,9 +110,21 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     });
     try {
       final categories = await _services.categories();
+      final branches = await BranchRepository().list();
       if (!mounted) return;
       setState(() {
         _categories = categories;
+        _apiBranches = [
+          for (final branch in branches)
+            BranchLookup(
+              branchId: branch.id,
+              branchCode: branch.branchCode,
+              branchName: branch.branchName,
+            ),
+        ];
+        if (widget.service == null && _branchId == null && _apiBranches.isNotEmpty) {
+          _branchId = _apiBranches.first.branchId;
+        }
         _loadingCategories = false;
         final existing = widget.service;
         if (existing != null) {
@@ -145,10 +165,7 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
     final branchId = _branchId;
     final duration = tryParseDuration(_durationController.text);
     final price = tryParsePrice(_priceController.text);
-    if (category == null ||
-        (!_usesApi && branchId == null) ||
-        duration == null ||
-        price == null) {
+    if (category == null || branchId == null || duration == null || price == null) {
       setState(() => _validateOnInteraction = true);
       return;
     }
@@ -178,6 +195,9 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
             durationMinutes: duration,
             price: price,
             categoryName: category,
+            branchId: branchId,
+            isCustomerVisible: _isCustomerVisible,
+            isPopular: _isPopular,
           );
         } else {
           saved = await _services.update(
@@ -189,6 +209,9 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
               durationMinutes: duration,
               price: price,
               isActive: _isActive,
+              isCustomerVisible: _isCustomerVisible,
+              isPopular: _isPopular,
+              branchId: branchId,
             ),
           );
         }
@@ -207,8 +230,6 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
       }
       return;
     }
-
-    if (branchId == null) return;
 
     final SalonService saved;
     if (existing == null) {
@@ -341,9 +362,9 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
                                     onCategoryChanged: (value) {
                                       setState(() => _category = value);
                                     },
-                                    showBranch: !_usesApi,
+                                    showBranch: true,
                                     branchId: _branchId,
-                                    branches: mockBranches,
+                                    branches: _usesApi ? _apiBranches : mockBranches,
                                     onBranchChanged: (value) {
                                       setState(() => _branchId = value);
                                     },
@@ -352,7 +373,24 @@ class _CreateServiceScreenState extends State<CreateServiceScreen> {
                                     onActiveChanged: (value) {
                                       setState(() => _isActive = value);
                                     },
+                                    isCustomerVisible: _isCustomerVisible,
+                                    onCustomerVisibleChanged: (value) {
+                                      setState(() => _isCustomerVisible = value);
+                                    },
+                                    isPopular: _isPopular,
+                                    onPopularChanged: (value) {
+                                      setState(() => _isPopular = value);
+                                    },
                                   ),
+                                  if (_usesApi && editing && widget.service != null) ...[
+                                    const SizedBox(height: 12),
+                                    CataloguePhotoEditor(
+                                      hasPhoto: widget.service!.photoPath != null,
+                                      load: () => _services.readPhoto(widget.service!.serviceId),
+                                      upload: (bytes) => _services.uploadPhoto(widget.service!, bytes),
+                                      remove: () => _services.removePhoto(widget.service!),
+                                    ),
+                                  ],
                                   if (_saveError != null) ...[
                                     const SizedBox(height: 8),
                                     Text(

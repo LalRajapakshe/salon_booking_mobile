@@ -34,6 +34,9 @@ class SalonService {
   final String categoryName;
   final String description;
   final bool isActive;
+  final bool isCustomerVisible;
+  final bool isPopular;
+  final String? photoPath;
   final DateTime createdDate;
 
   const SalonService({
@@ -49,6 +52,9 @@ class SalonService {
     required this.categoryName,
     required this.description,
     required this.isActive,
+    this.isCustomerVisible = false,
+    this.isPopular = false,
+    this.photoPath,
     required this.createdDate,
   });
 
@@ -83,6 +89,9 @@ class SalonService {
     String? categoryName,
     String? description,
     bool? isActive,
+    bool? isCustomerVisible,
+    bool? isPopular,
+    String? photoPath,
     DateTime? createdDate,
   }) {
     return SalonService(
@@ -98,6 +107,9 @@ class SalonService {
       categoryName: categoryName ?? this.categoryName,
       description: description ?? this.description,
       isActive: isActive ?? this.isActive,
+      isCustomerVisible: isCustomerVisible ?? this.isCustomerVisible,
+      isPopular: isPopular ?? this.isPopular,
+      photoPath: photoPath ?? this.photoPath,
       createdDate: createdDate ?? this.createdDate,
     );
   }

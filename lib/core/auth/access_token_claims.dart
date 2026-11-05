@@ -13,6 +13,19 @@ class AccessTokenClaims {
     return value;
   }
 
+  /// A salon-wide sign-in has no branch on the token, and a platform
+  /// administrator's stored branch is cleared on each request. The schedule
+  /// must name a branch for those accounts. A token this client cannot read
+  /// keeps the previous request shape.
+  static bool needsExplicitBranch(String? token) {
+    final payload = _payload(token);
+    if (payload == null) return false;
+    final platform = payload['PlatformAdmin'];
+    if (platform == true || platform == 'true') return true;
+    final branch = _int(payload['BranchId']);
+    return branch == null || branch <= 0;
+  }
+
   static int? tenantId(String? token) {
     final value = _claim(token, 'TenantId');
     if (value == null || value <= 0) return null;

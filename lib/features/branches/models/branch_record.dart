@@ -9,8 +9,11 @@ class BranchRecord {
   final String? phoneNo;
   final String? email;
   final String? managerName;
+  final String? highlight;
+  final String? photoPath;
   final bool isHeadOffice;
   final bool isActive;
+  final bool isCustomerVisible;
 
   const BranchRecord({
     required this.id,
@@ -23,7 +26,10 @@ class BranchRecord {
     this.phoneNo,
     this.email,
     this.managerName,
+    this.highlight,
+    this.photoPath,
     required this.isHeadOffice,
     required this.isActive,
+    this.isCustomerVisible = false,
   });
 }

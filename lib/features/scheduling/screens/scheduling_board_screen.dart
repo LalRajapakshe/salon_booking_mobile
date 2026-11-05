@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/auth/access_token_claims.dart';
+import '../../../core/auth/auth_session.dart';
+import '../../../shared/widgets/app_dropdown.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../appointments/data/appointment_repository.dart';
 import '../../appointments/data/availability_repository.dart';
@@ -8,6 +11,8 @@ import '../../appointments/models/appointment.dart';
 import '../../appointments/models/appointment_service_line.dart';
 import '../../appointments/models/appointment_status.dart';
 import '../../appointments/models/employee_availability.dart' as availability;
+import '../../branches/data/branch_repository.dart';
+import '../../branches/models/branch_record.dart';
 import '../../customers/data/customer_repository.dart';
 import '../../employees/data/employee_repository.dart';
 import '../../services/data/service_repository.dart';
@@ -57,8 +62,13 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
   late final EmployeeRepository _employees;
   late final CustomerRepository _customers;
   late final ServiceRepository _services;
+  List<BranchRecord> _branches = const [];
+  int? _scheduleBranchId;
 
   bool get _demo => !_repository.isApiBacked;
+
+  bool get _selectBranch =>
+      AccessTokenClaims.needsExplicitBranch(AuthSession.instance.accessToken);
 
   /// Production loads employees, customers, and services. Tests that inject
   /// the appointment repository keep the appointment payload alone.
@@ -182,9 +192,21 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     if (_demo) return;
     final date = _date;
     try {
-      final appointments = await _repository.list(date: date);
-      final directory = _useDirectory ? await _directory() : _BoardDirectory.empty;
+      await _ensureBranch(date);
       if (!mounted || date != _date) return;
+      if (_selectBranch && (_scheduleBranchId == null || _scheduleBranchId! <= 0)) {
+        setState(() {
+          _loading = false;
+          _error = 'Choose a branch before opening the schedule.';
+        });
+        return;
+      }
+      final branchId = _selectBranch ? _scheduleBranchId : null;
+      final appointments = await _repository.list(date: date, branchId: branchId);
+      final directory = _useDirectory ? await _directory(branchId) : _BoardDirectory.empty;
+      if (!mounted || date != _date || branchId != (_selectBranch ? _scheduleBranchId : null)) {
+        return;
+      }
       final day = SchedulingBoardMapper.map(
         appointments,
         date,
@@ -213,12 +235,32 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     }
   }
 
-  Future<_BoardDirectory> _directory() async {
+  Future<void> _ensureBranch(DateTime date) async {
+    if (!_selectBranch || _branches.isNotEmpty) return;
+    final branches = await BranchRepository().list();
+    if (!mounted || date != _date) return;
+    final active = branches.where((item) => item.isActive && item.id > 0).toList();
+    BranchRecord? chosen;
+    for (final branch in active) {
+      if (branch.isHeadOffice) {
+        chosen = branch;
+        break;
+      }
+    }
+    chosen ??= active.isEmpty ? null : active.first;
+    setState(() {
+      _branches = active;
+      _scheduleBranchId = chosen?.id;
+    });
+  }
+
+  Future<_BoardDirectory> _directory(int? branchId) async {
     final roster = <SchedulingStaff>[];
     final customerNames = <int, String>{};
     final serviceNames = <int, String>{};
     try {
       for (final employee in await _employees.list()) {
+        if (branchId != null && employee.branchId != branchId) continue;
         roster.add(
           SchedulingStaff(
             staffId: '${employee.id}',
@@ -232,11 +274,13 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     }
     try {
       for (final customer in await _customers.list()) {
+        if (branchId != null && customer.branchId != branchId) continue;
         customerNames[customer.id] = customer.fullName;
       }
     } on ApiException {}
     try {
       for (final service in await _services.list()) {
+        if (branchId != null && service.branchId != branchId) continue;
         serviceNames[service.serviceId] = service.serviceName;
       }
     } on ApiException {}
@@ -297,6 +341,7 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
       availability: _availability,
       appointments: _repository,
       changeEmployee: changeEmployee,
+      branchId: _selectBranch ? _scheduleBranchId : null,
     );
     if (!mounted) return;
     if (result.scheduled) {
@@ -324,6 +369,7 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         serviceId: serviceId,
         date: _date,
         employeeId: employeeId,
+        branchId: _selectBranch ? _scheduleBranchId : null,
       );
       slotsByService[serviceId] = [
         for (final row in rows)
@@ -388,7 +434,11 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: () => showWorkingHoursDialog(context: context, date: _date),
+            onPressed: () => showWorkingHoursDialog(
+              context: context,
+              date: _date,
+              branchId: _selectBranch ? _scheduleBranchId : null,
+            ),
             child: const Text('Working hours'),
           ),
         ],
@@ -398,6 +448,29 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_branches.length > 1) ...[
+              AppDropdown<int>(
+                labelText: 'Branch',
+                value: _scheduleBranchId,
+                items: [
+                  for (final branch in _branches)
+                    DropdownMenuItem<int>(
+                      value: branch.id,
+                      child: Text(branch.branchName),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value == null || value == _scheduleBranchId) return;
+                  setState(() {
+                    _scheduleBranchId = value;
+                    _loading = true;
+                    _error = null;
+                  });
+                  _load();
+                },
+              ),
+              const SizedBox(height: 14),
+            ],
             SchedulingToolbar(
               date: _date,
               summary: _summary,

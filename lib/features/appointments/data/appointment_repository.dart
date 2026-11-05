@@ -20,17 +20,18 @@ class AppointmentRepository {
   /// Signed-in sessions read `GET /api/Appointments`.
   /// The list screen keeps the local catalog until a token exists so the
   /// current screens stay usable without a server.
-  Future<List<Appointment>> list({DateTime? date}) async {
+  Future<List<Appointment>> list({DateTime? date, int? branchId}) async {
     if (!_session.isSignedIn) {
       return AppointmentCatalog.appointments;
     }
 
     final dateQuery = date == null ? '' : '&date=${_dateOnly(date)}';
+    final branchQuery = branchId != null && branchId > 0 ? '&branchId=$branchId' : '';
     final appointments = <Appointment>[];
     var page = 1;
     while (page <= 50) {
       final body = await _client.getJson(
-        '/api/Appointments?page=$page&pageSize=100$dateQuery',
+        '/api/Appointments?page=$page&pageSize=100$dateQuery$branchQuery',
       );
       appointments.addAll(AppointmentApiMapper.page(body));
       if (page >= AppointmentApiMapper.totalPages(body)) break;

@@ -6,6 +6,7 @@ import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/app_text_field.dart';
+import '../../../shared/widgets/catalogue_photo_editor.dart';
 import '../data/branch_repository.dart';
 import '../models/branch_record.dart';
 
@@ -30,9 +31,11 @@ class _BranchFormScreenState extends State<BranchFormScreen> {
   final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _managerController = TextEditingController();
+  final TextEditingController _highlightController = TextEditingController();
 
   bool _isHeadOffice = false;
   bool _isActive = true;
+  bool _isCustomerVisible = false;
   bool _saving = false;
   bool _validateOnInteraction = false;
   String? _saveError;
@@ -49,8 +52,10 @@ class _BranchFormScreenState extends State<BranchFormScreen> {
     _phoneController.text = branch.phoneNo ?? '';
     _emailController.text = branch.email ?? '';
     _managerController.text = branch.managerName ?? '';
+    _highlightController.text = branch.highlight ?? '';
     _isHeadOffice = branch.isHeadOffice;
     _isActive = branch.isActive;
+    _isCustomerVisible = branch.isCustomerVisible;
   }
 
   @override
@@ -62,6 +67,7 @@ class _BranchFormScreenState extends State<BranchFormScreen> {
     _phoneController.dispose();
     _emailController.dispose();
     _managerController.dispose();
+    _highlightController.dispose();
     super.dispose();
   }
 
@@ -105,7 +111,9 @@ class _BranchFormScreenState extends State<BranchFormScreen> {
           phoneNo: _empty(_phoneController.text),
           email: _empty(_emailController.text),
           managerName: _empty(_managerController.text),
+          highlight: _empty(_highlightController.text),
           isHeadOffice: _isHeadOffice,
+          isCustomerVisible: _isCustomerVisible,
         );
       } else {
         await widget.repository.update(
@@ -120,8 +128,11 @@ class _BranchFormScreenState extends State<BranchFormScreen> {
             phoneNo: _empty(_phoneController.text),
             email: _empty(_emailController.text),
             managerName: _empty(_managerController.text),
+            highlight: _empty(_highlightController.text),
+            photoPath: existing.photoPath,
             isHeadOffice: _isHeadOffice,
             isActive: _isActive,
+            isCustomerVisible: _isCustomerVisible,
           ),
         );
       }
@@ -220,12 +231,34 @@ class _BranchFormScreenState extends State<BranchFormScreen> {
               prefixIcon: Icons.badge_outlined,
               validator: (value) => Validators.maxLength(value, 100),
             ),
+            AppTextField(
+              controller: _highlightController,
+              labelText: 'Customer highlight',
+              prefixIcon: Icons.short_text,
+              validator: (value) => Validators.maxLength(value, 150),
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Head office'),
               value: _isHeadOffice,
               onChanged: (value) => setState(() => _isHeadOffice = value),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Visible in the customer app'),
+              subtitle: const Text('Active staff records can stay hidden from customers'),
+              value: _isCustomerVisible,
+              onChanged: (value) => setState(() => _isCustomerVisible = value),
+            ),
+            if (editing) ...[
+              const SizedBox(height: 8),
+              CataloguePhotoEditor(
+                hasPhoto: widget.branch!.photoPath != null,
+                load: () => widget.repository.readPhoto(widget.branch!.id),
+                upload: (bytes) => widget.repository.uploadPhoto(widget.branch!.id, bytes),
+                remove: () => widget.repository.removePhoto(widget.branch!.id),
+              ),
+            ],
             if (editing)
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,

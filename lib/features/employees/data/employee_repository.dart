@@ -40,6 +40,10 @@ class EmployeeRepository {
     String? gender,
     DateTime? dateOfBirth,
     String? address,
+    String? specialisation,
+    String? professionalDescription,
+    bool isCustomerVisible = false,
+    int? branchId,
   }) async {
     final body = <String, dynamic>{
       'firstName': firstName.trim(),
@@ -48,7 +52,17 @@ class EmployeeRepository {
       'designation': designation.trim(),
       'hireDate': _dateOnly(hireDate),
       'salary': salary,
+      'isCustomerVisible': isCustomerVisible,
     };
+    if (branchId != null && branchId > 0) body['branchId'] = branchId;
+    final specialisationText = specialisation?.trim();
+    if (specialisationText != null && specialisationText.isNotEmpty) {
+      body['specialisation'] = specialisationText;
+    }
+    final description = professionalDescription?.trim();
+    if (description != null && description.isNotEmpty) {
+      body['professionalDescription'] = description;
+    }
     final trimmedEmail = email?.trim();
     if (trimmedEmail != null && trimmedEmail.isNotEmpty) body['email'] = trimmedEmail;
     final trimmedGender = gender?.trim();
@@ -76,9 +90,12 @@ class EmployeeRepository {
       'lastName': employee.lastName.trim(),
       'mobileNo': employee.mobileNo.trim(),
       'designation': (employee.designation ?? '').trim(),
+      'specialisation': employee.specialisation?.trim(),
+      'professionalDescription': employee.professionalDescription?.trim(),
       'hireDate': _dateOnly(hireDate),
       'salary': employee.salary,
       'isActive': employee.isActive,
+      'isCustomerVisible': employee.isCustomerVisible,
     };
     final email = employee.email?.trim();
     if (email != null && email.isNotEmpty) body['email'] = email;
@@ -96,6 +113,25 @@ class EmployeeRepository {
   /// `DELETE /api/Employees/{id}` marks the row deleted. It stays in the database.
   Future<void> delete(int employeeId) {
     return _client.deleteJson('/api/Employees/$employeeId');
+  }
+
+  Future<EmployeeRecord> uploadPhoto(int employeeId, List<int> bytes) {
+    return _client
+        .postMultipart(
+          '/api/Employees/$employeeId/photo',
+          field: 'file',
+          bytes: bytes,
+          filename: 'photo.jpg',
+        )
+        .then(EmployeeApiMapper.employee);
+  }
+
+  Future<EmployeeRecord> removePhoto(int employeeId) {
+    return _client.deleteJson('/api/Employees/$employeeId/photo').then(EmployeeApiMapper.employee);
+  }
+
+  Future<List<int>> readPhoto(int employeeId) {
+    return _client.getBytes('/api/Employees/$employeeId/photo');
   }
 
   static String _dateOnly(DateTime value) {

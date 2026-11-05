@@ -83,6 +83,9 @@ class ServiceApiMapper {
       categoryName: categoryNames[categoryId] ?? 'Category $categoryId',
       description: json['description'] as String? ?? '',
       isActive: json['isActive'] == true,
+      isCustomerVisible: json['isCustomerVisible'] == true,
+      isPopular: json['isPopular'] == true,
+      photoPath: _text(json['photoPath']),
       createdDate: created,
     );
   }
@@ -96,6 +99,12 @@ class ServiceApiMapper {
     if (value is int) return value;
     if (value is num) return value.toInt();
     return int.tryParse('$value') ?? 0;
+  }
+
+  static String? _text(Object? value) {
+    if (value is! String) return null;
+    final trimmed = value.trim();
+    return trimmed.isEmpty ? null : trimmed;
   }
 
   static DateTime? _date(Object? value) {

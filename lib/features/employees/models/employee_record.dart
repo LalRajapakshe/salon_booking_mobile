@@ -10,8 +10,12 @@ class EmployeeRecord {
   final String? address;
   final DateTime? hireDate;
   final String? designation;
+  final String? specialisation;
+  final String? professionalDescription;
+  final String? photoPath;
   final double salary;
   final bool isActive;
+  final bool isCustomerVisible;
   final DateTime createdDate;
   final int branchId;
 
@@ -27,8 +31,12 @@ class EmployeeRecord {
     this.address,
     this.hireDate,
     this.designation,
+    this.specialisation,
+    this.professionalDescription,
+    this.photoPath,
     required this.salary,
     required this.isActive,
+    this.isCustomerVisible = false,
     required this.createdDate,
     required this.branchId,
   });

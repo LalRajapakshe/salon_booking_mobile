@@ -14,6 +14,7 @@ Future<void> showWorkingHoursDialog({
   required DateTime date,
   EmployeeRepository? employees,
   StaffScheduleRepository? schedules,
+  int? branchId,
 }) {
   return showDialog<void>(
     context: context,
@@ -22,6 +23,7 @@ Future<void> showWorkingHoursDialog({
         date: date,
         employees: employees,
         schedules: schedules,
+        branchId: branchId,
       );
     },
   );
@@ -31,12 +33,14 @@ class WorkingHoursDialog extends StatefulWidget {
   final DateTime date;
   final EmployeeRepository? employees;
   final StaffScheduleRepository? schedules;
+  final int? branchId;
 
   const WorkingHoursDialog({
     super.key,
     required this.date,
     this.employees,
     this.schedules,
+    this.branchId,
   });
 
   @override
@@ -78,10 +82,13 @@ class _WorkingHoursDialogState extends State<WorkingHoursDialog> {
     });
     try {
       final employees = await _employees.list();
-      final saved = await _schedules.list();
+      final branchId = widget.branchId;
+      final saved = await _schedules.list(branchId: branchId);
       if (!mounted) return;
       setState(() {
-        _employeeOptions = employees;
+        _employeeOptions = branchId == null || branchId <= 0
+            ? employees
+            : employees.where((item) => item.branchId == branchId).toList();
         _saved = saved;
         if (_employeeId == null || !employees.any((item) => item.id == _employeeId)) {
           _employeeId = null;
@@ -135,6 +142,7 @@ class _WorkingHoursDialogState extends State<WorkingHoursDialog> {
         dayOfWeek: _dayOfWeek,
         startTime: _clock(_start),
         endTime: _clock(_end),
+        branchId: widget.branchId,
       );
       if (!mounted) return;
       final name = _employeeName(employeeId);

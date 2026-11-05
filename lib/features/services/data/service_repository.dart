@@ -56,19 +56,25 @@ class ServiceRepository {
     required int durationMinutes,
     required double price,
     required String categoryName,
+    int? branchId,
+    bool isCustomerVisible = false,
+    bool isPopular = false,
   }) async {
-    final branchId = AccessTokenClaims.branchId(_session.accessToken);
-    if (branchId == null) {
+    final tokenBranch = AccessTokenClaims.branchId(_session.accessToken);
+    final resolvedBranch = tokenBranch ?? branchId;
+    if (resolvedBranch == null) {
       throw const ApiException('A branch is required.');
     }
 
     final body = <String, dynamic>{
-      'branchId': branchId,
+      'branchId': resolvedBranch,
       'serviceCategoryId': serviceCategoryId,
       'serviceName': serviceName.trim(),
       'description': description.trim(),
       'durationMinutes': durationMinutes,
       'price': price,
+      'isCustomerVisible': isCustomerVisible,
+      'isPopular': isPopular,
     };
     final created = ServiceApiMapper.service(
       await _client.postJson('/api/Services', body),
@@ -92,6 +98,8 @@ class ServiceRepository {
       'cost': service.cost,
       'commissionPercentage': service.commissionPercentage,
       'isActive': service.isActive,
+      'isCustomerVisible': service.isCustomerVisible,
+      'isPopular': service.isPopular,
     };
     return ServiceApiMapper.service(
       await _client.putJson('/api/Services/${service.serviceId}', body),
@@ -102,6 +110,27 @@ class ServiceRepository {
   /// `DELETE /api/Services/{id}` marks the row deleted. It stays in the database.
   Future<void> delete(int serviceId) {
     return _client.deleteJson('/api/Services/$serviceId');
+  }
+
+  Future<SalonService> uploadPhoto(SalonService service, List<int> bytes) {
+    return _client
+        .postMultipart(
+          '/api/Services/${service.serviceId}/photo',
+          field: 'file',
+          bytes: bytes,
+          filename: 'photo.jpg',
+        )
+        .then((json) => ServiceApiMapper.service(json, {service.serviceCategoryId: service.categoryName}));
+  }
+
+  Future<SalonService> removePhoto(SalonService service) {
+    return _client.deleteJson('/api/Services/${service.serviceId}/photo').then(
+          (json) => ServiceApiMapper.service(json, {service.serviceCategoryId: service.categoryName}),
+        );
+  }
+
+  Future<List<int>> readPhoto(int serviceId) {
+    return _client.getBytes('/api/Services/$serviceId/photo');
   }
 
   Future<ServiceCategoryRecord> createCategory({

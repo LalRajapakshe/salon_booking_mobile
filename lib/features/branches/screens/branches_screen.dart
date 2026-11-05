@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/auth/auth_session.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../data/branch_repository.dart';
@@ -75,8 +76,10 @@ class _BranchesScreenState extends State<BranchesScreen> {
         (label: 'Address', value: branch.addressLine1 ?? '—'),
         (label: 'Phone', value: branch.phoneNo ?? '—'),
         (label: 'Email', value: branch.email ?? '—'),
+        (label: 'Highlight', value: branch.highlight ?? '—'),
         (label: 'Manager', value: branch.managerName ?? '—'),
         (label: 'Head office', value: branch.isHeadOffice ? 'Yes' : 'No'),
+        (label: 'Customer app', value: branch.isCustomerVisible ? 'Visible' : 'Hidden'),
         (label: 'Status', value: branch.isActive ? 'Active' : 'Inactive'),
       ],
     );
@@ -123,11 +126,12 @@ class _BranchesScreenState extends State<BranchesScreen> {
                   style: TextStyle(color: Colors.grey),
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: _repository.isApiBacked ? () => _openForm() : null,
-                icon: const Icon(Icons.add_business_outlined),
-                label: const Text('Add Branch'),
-              ),
+              if (AuthSession.instance.can('platform.manage'))
+                ElevatedButton.icon(
+                  onPressed: _repository.isApiBacked ? () => _openForm() : null,
+                  icon: const Icon(Icons.add_business_outlined),
+                  label: const Text('Add Branch'),
+                ),
             ],
           ),
           const SizedBox(height: 16),

@@ -20,6 +20,7 @@ class AvailabilityRepository {
     required int serviceId,
     required DateTime date,
     int? employeeId,
+    int? branchId,
   }) async {
     if (!_session.isSignedIn) {
       throw const ApiException('Sign in is required.', statusCode: 401);
@@ -28,8 +29,9 @@ class AvailabilityRepository {
     final employeeQuery = employeeId == null || employeeId <= 0
         ? ''
         : '&employeeId=$employeeId';
+    final branchQuery = branchId != null && branchId > 0 ? '&branchId=$branchId' : '';
     final body = await _client.getJsonList(
-      '/api/Availability?serviceId=$serviceId&date=${_dateOnly(date)}$employeeQuery',
+      '/api/Availability?serviceId=$serviceId&date=${_dateOnly(date)}$employeeQuery$branchQuery',
     );
     return AvailabilityApiMapper.employees(body);
   }

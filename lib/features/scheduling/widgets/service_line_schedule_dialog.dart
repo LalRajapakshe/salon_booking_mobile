@@ -25,6 +25,7 @@ Future<ServiceLineScheduleResult> showServiceLineScheduleDialog({
   required AvailabilityRepository availability,
   required AppointmentRepository appointments,
   required bool changeEmployee,
+  int? branchId,
 }) {
   return showDialog<ServiceLineScheduleResult>(
     context: context,
@@ -36,6 +37,7 @@ Future<ServiceLineScheduleResult> showServiceLineScheduleDialog({
         availability: availability,
         appointments: appointments,
         changeEmployee: changeEmployee,
+        branchId: branchId,
       );
     },
   ).then((value) => value ?? const ServiceLineScheduleResult());
@@ -47,6 +49,7 @@ class ServiceLineScheduleDialog extends StatefulWidget {
   final AvailabilityRepository availability;
   final AppointmentRepository appointments;
   final bool changeEmployee;
+  final int? branchId;
 
   const ServiceLineScheduleDialog({
     super.key,
@@ -55,6 +58,7 @@ class ServiceLineScheduleDialog extends StatefulWidget {
     required this.availability,
     required this.appointments,
     required this.changeEmployee,
+    this.branchId,
   });
 
   @override
@@ -96,6 +100,7 @@ class _ServiceLineScheduleDialogState extends State<ServiceLineScheduleDialog> {
         serviceId: serviceId,
         date: widget.date,
         employeeId: widget.changeEmployee ? null : widget.segment.employeeId,
+        branchId: widget.branchId,
       );
       if (!mounted) return;
       setState(() {

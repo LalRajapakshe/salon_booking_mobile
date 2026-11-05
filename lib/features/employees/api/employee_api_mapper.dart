@@ -36,8 +36,12 @@ class EmployeeApiMapper {
       address: _text(json['address']),
       hireDate: _date(json['hireDate']),
       designation: _text(json['designation']),
+      specialisation: _text(json['specialisation']),
+      professionalDescription: _text(json['professionalDescription']),
+      photoPath: _text(json['photoPath']),
       salary: json['salary'] is num ? (json['salary'] as num).toDouble() : 0,
       isActive: json['isActive'] == true,
+      isCustomerVisible: json['isCustomerVisible'] == true,
       createdDate: created,
       branchId: _int(json['branchId']),
     );

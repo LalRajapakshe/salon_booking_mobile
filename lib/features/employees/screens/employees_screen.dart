@@ -9,6 +9,7 @@ import '../data/employee_repository.dart';
 import '../models/employee_record.dart';
 import 'assign_employee_service_screen.dart';
 import 'create_employee_screen.dart';
+import 'employee_qualifications_screen.dart';
 
 class EmployeesScreen extends StatefulWidget {
   final EmployeeRepository? repository;
@@ -284,6 +285,13 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                             _view(employee);
                           case 'edit':
                             _openEdit(employee);
+                          case 'qualifications':
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => EmployeeQualificationsScreen(employee: employee),
+                              ),
+                            );
                           case 'delete':
                             _confirmDelete(employee);
                         }
@@ -291,6 +299,7 @@ class _EmployeesScreenState extends State<EmployeesScreen> {
                       itemBuilder: (context) => const [
                         PopupMenuItem(value: 'view', child: Text('View')),
                         PopupMenuItem(value: 'edit', child: Text('Edit')),
+                        PopupMenuItem(value: 'qualifications', child: Text('Qualifications')),
                         PopupMenuItem(value: 'delete', child: Text('Delete')),
                       ],
                     ),

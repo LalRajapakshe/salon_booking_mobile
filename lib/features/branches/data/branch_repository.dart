@@ -42,7 +42,9 @@ class BranchRepository {
     String? phoneNo,
     String? email,
     String? managerName,
+    String? highlight,
     required bool isHeadOffice,
+    bool isCustomerVisible = false,
   }) async {
     final tenantId = AccessTokenClaims.tenantId(_session.accessToken);
     if (tenantId == null) {
@@ -58,7 +60,9 @@ class BranchRepository {
         'phoneNo': _empty(phoneNo),
         'email': _empty(email),
         'managerName': _empty(managerName),
+        'highlight': _empty(highlight),
         'isHeadOffice': isHeadOffice,
+        'isCustomerVisible': isCustomerVisible,
       }),
     );
     if (created.id <= 0) {
@@ -78,8 +82,10 @@ class BranchRepository {
         'phoneNo': _empty(branch.phoneNo),
         'email': _empty(branch.email),
         'managerName': _empty(branch.managerName),
+        'highlight': _empty(branch.highlight),
         'isHeadOffice': branch.isHeadOffice,
         'isActive': branch.isActive,
+        'isCustomerVisible': branch.isCustomerVisible,
       }),
     );
   }
@@ -87,6 +93,25 @@ class BranchRepository {
   /// `DELETE /api/Branch/{id}` marks the row deleted. It stays in the database.
   Future<void> delete(int branchId) {
     return _client.deleteJson('/api/Branch/$branchId');
+  }
+
+  Future<BranchRecord> uploadPhoto(int branchId, List<int> bytes) {
+    return _client
+        .postMultipart(
+          '/api/Branch/$branchId/photo',
+          field: 'file',
+          bytes: bytes,
+          filename: 'photo.jpg',
+        )
+        .then(_branch);
+  }
+
+  Future<BranchRecord> removePhoto(int branchId) {
+    return _client.deleteJson('/api/Branch/$branchId/photo').then(_branch);
+  }
+
+  Future<List<int>> readPhoto(int branchId) {
+    return _client.getBytes('/api/Branch/$branchId/photo');
   }
 
   static String? _empty(String? value) {
@@ -119,8 +144,11 @@ class BranchRepository {
       phoneNo: text(json['phoneNo']),
       email: text(json['email']),
       managerName: text(json['managerName']),
+      highlight: text(json['highlight']),
+      photoPath: text(json['photoPath']),
       isHeadOffice: json['isHeadOffice'] == true,
       isActive: json['isActive'] == true,
+      isCustomerVisible: json['isCustomerVisible'] == true,
     );
   }
 }

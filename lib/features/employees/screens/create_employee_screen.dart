@@ -8,6 +8,9 @@ import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../../shared/widgets/app_text_field.dart';
+import '../../../shared/widgets/catalogue_photo_editor.dart';
+import '../../appointments/models/salon_lookups.dart';
+import '../../branches/data/branch_repository.dart';
 import '../data/employee_repository.dart';
 import '../models/employee_record.dart';
 
@@ -32,11 +35,16 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
   final TextEditingController _addressController = TextEditingController();
   final TextEditingController _designationController = TextEditingController();
   final TextEditingController _salaryController = TextEditingController();
+  final TextEditingController _specialisationController = TextEditingController();
+  final TextEditingController _descriptionController = TextEditingController();
 
   late final EmployeeRepository _repository;
   String? _gender;
   DateTime? _dateOfBirth;
   DateTime? _hireDate;
+  bool _isCustomerVisible = false;
+  int? _branchId;
+  List<BranchLookup> _branches = const [];
   bool _saving = false;
   bool _validateOnInteraction = false;
   bool _isActive = true;
@@ -61,6 +69,32 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
       _dateOfBirth = employee.dateOfBirth;
       _hireDate = employee.hireDate;
       _isActive = employee.isActive;
+      _isCustomerVisible = employee.isCustomerVisible;
+      _specialisationController.text = employee.specialisation ?? '';
+      _descriptionController.text = employee.professionalDescription ?? '';
+      _branchId = employee.branchId;
+    } else {
+      _loadBranches();
+    }
+  }
+
+  Future<void> _loadBranches() async {
+    try {
+      final branches = await BranchRepository().list();
+      if (!mounted) return;
+      setState(() {
+        _branches = [
+          for (final branch in branches)
+            BranchLookup(
+              branchId: branch.id,
+              branchCode: branch.branchCode,
+              branchName: branch.branchName,
+            ),
+        ];
+        _branchId ??= _branches.isEmpty ? null : _branches.first.branchId;
+      });
+    } on ApiException {
+      if (!mounted) return;
     }
   }
 
@@ -73,6 +107,8 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
     _addressController.dispose();
     _designationController.dispose();
     _salaryController.dispose();
+    _specialisationController.dispose();
+    _descriptionController.dispose();
     super.dispose();
   }
 
@@ -138,6 +174,10 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
               gender: _gender,
               dateOfBirth: _dateOfBirth,
               address: _emptyToNull(_addressController.text),
+              specialisation: _emptyToNull(_specialisationController.text),
+              professionalDescription: _emptyToNull(_descriptionController.text),
+              isCustomerVisible: _isCustomerVisible,
+              branchId: _branchId,
             )
           : await _repository.update(
               EmployeeRecord(
@@ -152,8 +192,12 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
                 address: _emptyToNull(_addressController.text),
                 hireDate: _hireDate,
                 designation: _designationController.text.trim(),
+                specialisation: _emptyToNull(_specialisationController.text),
+                professionalDescription: _emptyToNull(_descriptionController.text),
+                photoPath: editing.photoPath,
                 salary: salary,
                 isActive: _isActive,
+                isCustomerVisible: _isCustomerVisible,
                 createdDate: editing.createdDate,
                 branchId: editing.branchId,
               ),
@@ -288,6 +332,41 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
               keyboardType: const TextInputType.numberWithOptions(decimal: true),
               validator: _salary,
             ),
+            if (!widget.isEditing && _branches.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              AppDropdown<int>(
+                labelText: 'Branch',
+                hintText: 'Select branch',
+                value: _branchId,
+                items: [
+                  for (final branch in _branches)
+                    DropdownMenuItem<int>(value: branch.branchId, child: Text(branch.label)),
+                ],
+                onChanged: (value) => setState(() => _branchId = value),
+              ),
+            ],
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _specialisationController,
+              labelText: 'Specialisation',
+              prefixIcon: Icons.auto_awesome_outlined,
+              validator: (value) => Validators.maxLength(value, 150),
+            ),
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _descriptionController,
+              labelText: 'Professional description',
+              prefixIcon: Icons.notes_outlined,
+              maxLines: 4,
+              validator: (value) => Validators.maxLength(value, 1000),
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Visible in the customer app'),
+              subtitle: const Text('Customers only see stylists assigned to a service'),
+              value: _isCustomerVisible,
+              onChanged: (value) => setState(() => _isCustomerVisible = value),
+            ),
             if (widget.isEditing) ...[
               const SizedBox(height: 8),
               SwitchListTile(
@@ -295,6 +374,13 @@ class _CreateEmployeeScreenState extends State<CreateEmployeeScreen> {
                 title: const Text('Active'),
                 value: _isActive,
                 onChanged: (value) => setState(() => _isActive = value),
+              ),
+              const SizedBox(height: 8),
+              CataloguePhotoEditor(
+                hasPhoto: widget.employee!.photoPath != null,
+                load: () => _repository.readPhoto(widget.employee!.id),
+                upload: (bytes) => _repository.uploadPhoto(widget.employee!.id, bytes),
+                remove: () => _repository.removePhoto(widget.employee!.id),
               ),
             ],
             if (_saveError != null) ...[

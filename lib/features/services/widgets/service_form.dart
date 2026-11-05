@@ -75,6 +75,10 @@ class ServiceForm extends StatelessWidget {
   final bool isActive;
   final bool activeLocked;
   final ValueChanged<bool> onActiveChanged;
+  final bool isCustomerVisible;
+  final ValueChanged<bool>? onCustomerVisibleChanged;
+  final bool isPopular;
+  final ValueChanged<bool>? onPopularChanged;
 
   const ServiceForm({
     super.key,
@@ -93,6 +97,10 @@ class ServiceForm extends StatelessWidget {
     required this.isActive,
     this.activeLocked = false,
     required this.onActiveChanged,
+    this.isCustomerVisible = false,
+    this.onCustomerVisibleChanged,
+    this.isPopular = false,
+    this.onPopularChanged,
   });
 
   @override
@@ -215,6 +223,20 @@ class ServiceForm extends StatelessWidget {
               ),
               value: activeLocked ? true : isActive,
               onChanged: activeLocked ? null : onActiveChanged,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Visible in the customer app'),
+              subtitle: const Text('Hiding a service does not deactivate it for staff'),
+              value: isCustomerVisible,
+              onChanged: onCustomerVisibleChanged,
+            ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Popular'),
+              subtitle: const Text('Highlighted on the customer home screen'),
+              value: isPopular,
+              onChanged: onPopularChanged,
             ),
           ],
         );
