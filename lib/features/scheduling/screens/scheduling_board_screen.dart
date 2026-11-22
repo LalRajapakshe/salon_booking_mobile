@@ -6,6 +6,9 @@ import '../../../core/auth/auth_session.dart';
 import '../../../shared/widgets/app_dropdown.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../appointments/data/appointment_repository.dart';
+import '../../appointments/screens/allocation_screen.dart';
+import '../../appointments/widgets/cancellation_queue_button.dart';
+import '../../appointments/widgets/cancellation_request_mark.dart';
 import '../../appointments/data/availability_repository.dart';
 import '../../appointments/models/appointment.dart';
 import '../../appointments/models/appointment_service_line.dart';
@@ -62,6 +65,7 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
   late final EmployeeRepository _employees;
   late final CustomerRepository _customers;
   late final ServiceRepository _services;
+  final ValueNotifier<int> _queueRefresh = ValueNotifier<int>(0);
   List<BranchRecord> _branches = const [];
   int? _scheduleBranchId;
 
@@ -188,6 +192,12 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
     _load();
   }
 
+  @override
+  void dispose() {
+    _queueRefresh.dispose();
+    super.dispose();
+  }
+
   Future<void> _load() async {
     if (_demo) return;
     final date = _date;
@@ -223,6 +233,7 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         _serviceNamesById = directory.serviceNames;
         _alignFilters();
       });
+      _queueRefresh.value++;
     } catch (error) {
       if (!mounted || date != _date) return;
       setState(() {
@@ -433,6 +444,11 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
+          CancellationQueueButton(
+            repository: _repository,
+            refreshSignal: _queueRefresh,
+            onResolved: _load,
+          ),
           TextButton(
             onPressed: () => showWorkingHoursDialog(
               context: context,
@@ -572,6 +588,8 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         final appointment = _appointmentByReference(block.appointmentReference);
         if (appointment == null) return;
         final segment = _segmentFor(block);
+        final canDecide = AuthSession.instance.can('appointments.manage') &&
+            appointment.cancellationRequested;
         showAppointmentSchedulePanel(
           context: context,
           appointment: appointment,
@@ -582,6 +600,8 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
           onChangeEmployeeLine: _demo
               ? null
               : (line) => _scheduleLine(line, changeEmployee: true),
+          onApproveCancellation: canDecide ? () => _decideCancellation(appointment, approve: true) : null,
+          onDeclineCancellation: canDecide ? () => _decideCancellation(appointment, approve: false) : null,
         );
       },
       onAvailableTap: (staff, startMinute) {
@@ -597,6 +617,101 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
             ),
           ),
       ],
+    );
+  }
+
+  Future<void> _decideCancellation(SchedulingAppointment appointment, {required bool approve}) async {
+    if (!AuthSession.instance.can('appointments.manage') || !appointment.cancellationRequested) return;
+    final id = int.tryParse(appointment.reference);
+    if (id == null) return;
+    try {
+      if (approve) {
+        await _repository.approveCancellation(appointmentId: id);
+      } else {
+        await _repository.declineCancellation(appointmentId: id);
+      }
+      if (!mounted) return;
+      AppSnackBar.success(
+        context,
+        approve ? 'Cancellation approved.' : 'Cancellation request declined.',
+      );
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+      await _load();
+    }
+  }
+
+  Future<void> _openUnscheduled(UnscheduledVisit visit) async {
+    final id = int.tryParse(visit.reference);
+    if (!_demo && id != null) {
+      final saved = await Navigator.of(context).push<bool>(
+        MaterialPageRoute(
+          builder: (_) => AllocationScreen(repository: _repository, appointmentId: id),
+        ),
+      );
+      if (saved == true) await _load();
+      return;
+    }
+    final canDecide = AuthSession.instance.can('appointments.manage') && visit.cancellationRequested;
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text(visit.customerName),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Appointment #${visit.reference}'),
+            Text(visit.servicesLabel),
+            Text(visit.status),
+            if (visit.cancellationRequested) ...[
+              const SizedBox(height: 8),
+              const CancellationRequestMark(),
+            ],
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
+          if (canDecide) ...[
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _decideCancellation(
+                  SchedulingAppointment(
+                    reference: visit.reference,
+                    customerName: visit.customerName,
+                    date: _date,
+                    status: visit.status,
+                    services: const [],
+                    cancellationRequested: true,
+                  ),
+                  approve: false,
+                );
+              },
+              child: const Text('Decline cancellation'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _decideCancellation(
+                  SchedulingAppointment(
+                    reference: visit.reference,
+                    customerName: visit.customerName,
+                    date: _date,
+                    status: visit.status,
+                    services: const [],
+                    cancellationRequested: true,
+                  ),
+                  approve: true,
+                );
+              },
+              child: const Text('Approve cancellation'),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -616,10 +731,23 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
             for (final visit in visits)
               Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: Text(
-                  '${visit.customerName} · ${visit.servicesLabel} · ${visit.status}',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
+                child: InkWell(
+                  onTap: () => _openUnscheduled(visit),
+                  child: Row(
+                  children: [
+                    if (visit.cancellationRequested) ...[
+                      const CancellationRequestMark(),
+                      const SizedBox(width: 8),
+                    ],
+                    Expanded(
+                      child: Text(
+                        '${visit.customerName} · ${visit.servicesLabel} · ${visit.status}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
                 ),
               ),
           ],

@@ -20,6 +20,7 @@ import '../widgets/section_title.dart';
 //import '../../revenue/widgets/payment_breakdown_card.dart';
 
 import '../../appointments/screens/appointments_screen.dart';
+import '../../appointments/widgets/cancellation_queue_button.dart';
 import '../../customers/screens/customers_screen.dart';
 import '../../branches/screens/branches_screen.dart';
 import '../../employees/screens/employees_screen.dart';
@@ -30,7 +31,7 @@ import '../../services/screens/service_categories_screen.dart';
 import '../../services/screens/services_screen.dart';
 
 class DashboardScreen extends StatelessWidget {
-  DashboardScreen({super.key});
+  const DashboardScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -49,6 +50,9 @@ class DashboardScreen extends StatelessWidget {
           "Salon Booking System",
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
+        actions: const [
+          CancellationQueueButton(),
+        ],
       ),
 
       body: SingleChildScrollView(
@@ -394,7 +398,7 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
   return [
     _DashboardItem(
       icon: Icons.desk,
-      title: 'Reception Desk',
+      title: 'Front Desk',
       color: Colors.deepPurple,
       onTap: () => _openScreen(context, const ReceptionDeskScreen()),
     ),

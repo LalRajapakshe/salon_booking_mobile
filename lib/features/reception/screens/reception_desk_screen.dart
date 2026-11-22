@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/auth/auth_session.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../appointments/screens/create_appointment_screen.dart';
 import '../../appointments/widgets/appointment_status_badge.dart';
+import '../../appointments/widgets/cancellation_queue_button.dart';
+import '../../appointments/widgets/cancellation_request_mark.dart';
 import '../data/reception_repository.dart';
 import '../models/reception_visit.dart';
 import '../widgets/check_in_dialog.dart';
@@ -27,6 +30,7 @@ class ReceptionDeskScreen extends StatefulWidget {
 class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
   late final ReceptionRepository _repository = widget.repository ?? ReceptionRepository();
   final TextEditingController _searchController = TextEditingController();
+  final ValueNotifier<int> _queueRefresh = ValueNotifier<int>(0);
 
   ReceptionDay? _day;
   String? _error;
@@ -43,6 +47,7 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _queueRefresh.dispose();
     super.dispose();
   }
 
@@ -58,6 +63,7 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
         _day = day;
         _loading = false;
       });
+      _queueRefresh.value++;
     } on ApiException catch (error) {
       if (!mounted) return;
       setState(() {
@@ -93,6 +99,29 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
     if (!mounted || saved != true) return;
     AppSnackBar.success(context, '${visit.customerName} is confirmed.');
     await _load();
+  }
+
+  bool _canDecide(ReceptionVisit visit) =>
+      visit.cancellationRequested && AuthSession.instance.can('appointments.manage');
+
+  Future<void> _decide(ReceptionVisit visit, {required bool approve}) async {
+    if (!_canDecide(visit)) return;
+    try {
+      if (approve) {
+        await _repository.appointments.approveCancellation(appointmentId: visit.appointmentId);
+      } else {
+        await _repository.appointments.declineCancellation(appointmentId: visit.appointmentId);
+      }
+      if (!mounted) return;
+      AppSnackBar.success(
+        context,
+        approve ? 'Cancellation approved.' : 'Cancellation request declined.',
+      );
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
   }
 
   Future<void> _checkIn(ReceptionVisit visit) async {
@@ -142,10 +171,30 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
             Text(visit.employee),
             const SizedBox(height: 8),
             AppointmentStatusBadge(status: visit.status),
+            if (visit.cancellationRequested) ...[
+              const SizedBox(height: 8),
+              const CancellationRequestMark(),
+            ],
           ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+          if (_canDecide(visit)) ...[
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _decide(visit, approve: false);
+              },
+              child: const Text('Decline cancellation'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _decide(visit, approve: true);
+              },
+              child: const Text('Approve cancellation'),
+            ),
+          ],
         ],
       ),
     );
@@ -159,7 +208,14 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
       appBar: AppBar(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
-        title: const Text('Reception Desk'),
+        title: const Text('Front Desk'),
+        actions: [
+          CancellationQueueButton(
+            repository: _repository.appointments,
+            refreshSignal: _queueRefresh,
+            onResolved: _load,
+          ),
+        ],
       ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -199,10 +255,22 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
                         if (_visible.isEmpty)
                           const _EmptyState()
                         else if (wide)
-                          _VisitTable(visits: _visible, onView: _view, onConfirm: _confirm, onCheckIn: _checkIn)
+                          _VisitTable(
+                            visits: _visible,
+                            onView: _view,
+                            onConfirm: _confirm,
+                            onCheckIn: _checkIn,
+                            onDecide: _decide,
+                          )
                         else
                           for (final visit in _visible)
-                            _VisitCard(visit: visit, onView: _view, onConfirm: _confirm, onCheckIn: _checkIn),
+                            _VisitCard(
+                              visit: visit,
+                              onView: _view,
+                              onConfirm: _confirm,
+                              onCheckIn: _checkIn,
+                              onDecide: _decide,
+                            ),
                       ],
                     );
                   },
@@ -224,7 +292,7 @@ class _Header extends StatelessWidget {
     final title = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Reception Desk', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
+        const Text('Front Desk', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700)),
         const SizedBox(height: 4),
         const Text(
           'Manage customer arrivals, check-in and walk-ins',
@@ -377,12 +445,14 @@ class _VisitTable extends StatelessWidget {
   final ValueChanged<ReceptionVisit> onView;
   final ValueChanged<ReceptionVisit> onConfirm;
   final ValueChanged<ReceptionVisit> onCheckIn;
+  final void Function(ReceptionVisit visit, {required bool approve}) onDecide;
 
   const _VisitTable({
     required this.visits,
     required this.onView,
     required this.onConfirm,
     required this.onCheckIn,
+    required this.onDecide,
   });
 
   @override
@@ -406,8 +476,21 @@ class _VisitTable extends StatelessWidget {
                 DataCell(Text(visit.customerName)),
                 DataCell(Text(visit.services)),
                 DataCell(Text(visit.employee)),
-                DataCell(AppointmentStatusBadge(status: visit.status)),
-                DataCell(_Actions(visit: visit, onView: onView, onConfirm: onConfirm, onCheckIn: onCheckIn)),
+                DataCell(Wrap(
+                  spacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    AppointmentStatusBadge(status: visit.status),
+                    if (visit.cancellationRequested) const CancellationRequestMark(),
+                  ],
+                )),
+                DataCell(_Actions(
+                  visit: visit,
+                  onView: onView,
+                  onConfirm: onConfirm,
+                  onCheckIn: onCheckIn,
+                  onDecide: onDecide,
+                )),
               ]),
           ],
         ),
@@ -421,12 +504,14 @@ class _VisitCard extends StatelessWidget {
   final ValueChanged<ReceptionVisit> onView;
   final ValueChanged<ReceptionVisit> onConfirm;
   final ValueChanged<ReceptionVisit> onCheckIn;
+  final void Function(ReceptionVisit visit, {required bool approve}) onDecide;
 
   const _VisitCard({
     required this.visit,
     required this.onView,
     required this.onConfirm,
     required this.onCheckIn,
+    required this.onDecide,
   });
 
   @override
@@ -444,7 +529,17 @@ class _VisitCard extends StatelessWidget {
             Text(visit.employee),
             const SizedBox(height: 8),
             AppointmentStatusBadge(status: visit.status),
-            _Actions(visit: visit, onView: onView, onConfirm: onConfirm, onCheckIn: onCheckIn),
+            if (visit.cancellationRequested) ...[
+              const SizedBox(height: 8),
+              const CancellationRequestMark(),
+            ],
+            _Actions(
+              visit: visit,
+              onView: onView,
+              onConfirm: onConfirm,
+              onCheckIn: onCheckIn,
+              onDecide: onDecide,
+            ),
           ],
         ),
       ),
@@ -457,12 +552,14 @@ class _Actions extends StatelessWidget {
   final ValueChanged<ReceptionVisit> onView;
   final ValueChanged<ReceptionVisit> onConfirm;
   final ValueChanged<ReceptionVisit> onCheckIn;
+  final void Function(ReceptionVisit visit, {required bool approve}) onDecide;
 
   const _Actions({
     required this.visit,
     required this.onView,
     required this.onConfirm,
     required this.onCheckIn,
+    required this.onDecide,
   });
 
   @override
@@ -475,6 +572,16 @@ class _Actions extends StatelessWidget {
           TextButton(onPressed: () => onConfirm(visit), child: const Text('Confirm')),
         if (visit.canCheckIn)
           TextButton(onPressed: () => onCheckIn(visit), child: const Text('Check in')),
+        if (visit.cancellationRequested && AuthSession.instance.can('appointments.manage')) ...[
+          TextButton(
+            onPressed: () => onDecide(visit, approve: true),
+            child: const Text('Approve cancellation'),
+          ),
+          TextButton(
+            onPressed: () => onDecide(visit, approve: false),
+            child: const Text('Decline cancellation'),
+          ),
+        ],
       ],
     );
   }

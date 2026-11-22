@@ -52,6 +52,7 @@ class AppointmentApiMapper {
       notes: json['notes'] as String?,
       schedulingState: json['schedulingState'] as String?,
       hasScheduledTime: scheduled.isNotEmpty,
+      cancellationRequest: json['cancellationRequest'] as String?,
       appointmentServices: lines,
     );
   }

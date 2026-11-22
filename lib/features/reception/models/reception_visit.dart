@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../appointments/models/appointment_status.dart';
 
-/// One row on the reception desk. Names come from lookup APIs, not from the appointment payload.
+/// One row on the front desk. Names come from lookup APIs, not from the appointment payload.
 class ReceptionVisit {
   final int appointmentId;
   final int customerId;
@@ -15,6 +15,7 @@ class ReceptionVisit {
   final AppointmentStatus status;
   final String? priceLabel;
   final String? notes;
+  final bool cancellationRequested;
 
   const ReceptionVisit({
     required this.appointmentId,
@@ -28,6 +29,7 @@ class ReceptionVisit {
     required this.status,
     this.priceLabel,
     this.notes,
+    this.cancellationRequested = false,
   });
 
   bool get canConfirm =>

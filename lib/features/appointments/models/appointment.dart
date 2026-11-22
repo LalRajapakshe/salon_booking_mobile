@@ -20,6 +20,7 @@ class Appointment {
   final String? notes;
   final String? schedulingState;
   final bool hasScheduledTime;
+  final String? cancellationRequest;
 
   /// A slot is allocated when any open service line has a start time.
   /// Header times on the local catalog are display-only and do not count.
@@ -42,6 +43,9 @@ class Appointment {
   /// Edit is open only before a time slot is allocated and before confirmation.
   bool get canEdit => !slotAllocated && !customerConfirmed;
 
+  bool get cancellationPending =>
+      cancellationRequest == 'Requested' || cancellationRequest == 'AwaitingApproval';
+
   const Appointment({
     required this.appointmentId,
     required this.branchId,
@@ -57,5 +61,6 @@ class Appointment {
     this.notes,
     this.schedulingState,
     this.hasScheduledTime = true,
+    this.cancellationRequest,
   });
 }

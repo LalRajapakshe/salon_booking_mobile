@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../shared/widgets/app_primary_button.dart';
 import '../../../shared/widgets/app_secondary_button.dart';
 import '../../../shared/widgets/app_snackbar.dart';
+import '../../appointments/widgets/cancellation_request_mark.dart';
 import '../data/mock_scheduling_data.dart';
 import '../models/scheduling_models.dart';
 
@@ -12,6 +13,8 @@ Future<void> showAppointmentSchedulePanel({
   SchedulingServiceSegment? focus,
   Future<void> Function(SchedulingServiceSegment segment)? onRescheduleLine,
   Future<void> Function(SchedulingServiceSegment segment)? onChangeEmployeeLine,
+  Future<void> Function()? onApproveCancellation,
+  Future<void> Function()? onDeclineCancellation,
 }) {
   return showDialog<void>(
     context: context,
@@ -48,6 +51,18 @@ Future<void> showAppointmentSchedulePanel({
           onChangeEmployeeLine,
           'Employee change noted for ${appointment.reference}.',
         ),
+        onApproveCancellation: onApproveCancellation == null
+            ? null
+            : () {
+                Navigator.of(dialogContext).pop();
+                onApproveCancellation();
+              },
+        onDeclineCancellation: onDeclineCancellation == null
+            ? null
+            : () {
+                Navigator.of(dialogContext).pop();
+                onDeclineCancellation();
+              },
       );
     },
   );
@@ -60,6 +75,8 @@ class AppointmentSchedulePanel extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onReschedule;
   final VoidCallback onChangeEmployee;
+  final VoidCallback? onApproveCancellation;
+  final VoidCallback? onDeclineCancellation;
 
   const AppointmentSchedulePanel({
     super.key,
@@ -69,6 +86,8 @@ class AppointmentSchedulePanel extends StatelessWidget {
     required this.onView,
     required this.onReschedule,
     required this.onChangeEmployee,
+    this.onApproveCancellation,
+    this.onDeclineCancellation,
   });
 
   @override
@@ -125,7 +144,25 @@ class AppointmentSchedulePanel extends StatelessWidget {
               ),
               const SizedBox(height: 12),
               _field('Status', appointment.status),
+              if (appointment.cancellationRequested) ...[
+                const SizedBox(height: 12),
+                const CancellationRequestMark(),
+              ],
               const SizedBox(height: 20),
+              if (onApproveCancellation != null && onDeclineCancellation != null) ...[
+                AppSecondaryButton(
+                  text: 'Decline cancellation',
+                  icon: Icons.close,
+                  onPressed: onDeclineCancellation!,
+                ),
+                const SizedBox(height: 10),
+                AppPrimaryButton(
+                  text: 'Approve cancellation',
+                  icon: Icons.check,
+                  onPressed: onApproveCancellation!,
+                ),
+                const SizedBox(height: 10),
+              ],
               AppSecondaryButton(
                 text: 'View Appointment',
                 icon: Icons.visibility_outlined,

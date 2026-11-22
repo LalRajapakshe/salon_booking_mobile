@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../appointments/widgets/cancellation_request_mark.dart';
 import '../models/scheduling_models.dart';
 
 class AppointmentScheduleCard extends StatelessWidget {
@@ -62,6 +63,10 @@ class AppointmentScheduleCard extends StatelessWidget {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
+                              if (block.cancellationRequested) ...[
+                                const CancellationRequestMark(),
+                                const SizedBox(height: 2),
+                              ],
                               Text(
                                 block.title,
                                 maxLines: 1,

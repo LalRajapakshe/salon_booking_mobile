@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/auth/auth_session.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_snackbar.dart';
@@ -185,6 +186,13 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           value: appointment.hasScheduledTime ? formatAppointmentTime(appointment.endTime) : '—',
         ),
         (label: 'Notes', value: notes == null || notes.isEmpty ? '—' : notes),
+        if (appointment.cancellationRequest == 'Requested' ||
+            appointment.cancellationRequest == 'AwaitingApproval')
+          (label: 'Cancellation', value: 'Waiting for salon approval'),
+        if (appointment.cancellationRequest == 'Declined')
+          (label: 'Cancellation', value: 'Request declined'),
+        if (appointment.cancellationRequest == 'Approved')
+          (label: 'Cancellation', value: 'Request approved'),
         if (!appointment.canEdit)
           (
             label: 'Edit',
@@ -194,6 +202,41 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           ),
       ],
     );
+  }
+
+  bool get _canManageAppointments => AuthSession.instance.can('appointments.manage');
+
+  bool _canDecideCancellation(Appointment appointment) {
+    final state = appointment.cancellationRequest;
+    final waiting = state == 'Requested' || state == 'AwaitingApproval';
+    return _canManageAppointments && waiting;
+  }
+
+  String? _cancellationLabel(Appointment appointment) => switch (appointment.cancellationRequest) {
+        'Requested' || 'AwaitingApproval' => 'Cancellation requested',
+        'Declined' => 'Cancellation declined',
+        'Approved' => 'Cancellation approved',
+        _ => null,
+      };
+
+  Future<void> _decideCancellation(Appointment appointment, {required bool approve}) async {
+    if (!_canDecideCancellation(appointment)) return;
+    try {
+      if (approve) {
+        await _repository.approveCancellation(appointmentId: appointment.appointmentId);
+      } else {
+        await _repository.declineCancellation(appointmentId: appointment.appointmentId);
+      }
+      if (!mounted) return;
+      AppSnackBar.success(
+        context,
+        approve ? 'Cancellation approved.' : 'Cancellation request declined.',
+      );
+      await _load(showSpinner: false);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
   }
 
   Future<void> _openEdit(Appointment appointment) async {
@@ -531,7 +574,22 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               DataCell(_cellText(
                 appointment.hasScheduledTime ? formatAppointmentTime(appointment.endTime) : '—',
               )),
-              DataCell(AppointmentStatusBadge(status: appointment.status)),
+              DataCell(
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    AppointmentStatusBadge(status: appointment.status),
+                    if (_cancellationLabel(appointment) case final label?)
+                      Text(
+                        label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 11, color: Color(0xFF5C5670)),
+                      ),
+                  ],
+                ),
+              ),
               DataCell(
                 PopupMenuButton<String>(
                   tooltip: 'Actions',
@@ -545,6 +603,10 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                         _openEdit(appointment);
                       case 'delete':
                         break;
+                      case 'approve-cancel':
+                        _decideCancellation(appointment, approve: true);
+                      case 'decline-cancel':
+                        _decideCancellation(appointment, approve: false);
                     }
                   },
                   itemBuilder: (context) => [
@@ -559,8 +621,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     ),
                     const PopupMenuItem<String>(
                       value: 'delete',
-                      child: const Text('Delete'),
+                      child: Text('Delete'),
                     ),
+                    if (_canDecideCancellation(appointment)) ...[
+                      const PopupMenuItem<String>(
+                        value: 'approve-cancel',
+                        child: Text('Approve cancellation'),
+                      ),
+                      const PopupMenuItem<String>(
+                        value: 'decline-cancel',
+                        child: Text('Decline cancellation'),
+                      ),
+                    ],
                   ],
                 ),
               ),

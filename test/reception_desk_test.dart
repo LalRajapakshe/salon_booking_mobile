@@ -3,6 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:salon_booking_mobile/core/api/api_exception.dart';
+import 'package:salon_booking_mobile/core/auth/auth_session.dart';
+import 'package:salon_booking_mobile/features/appointments/data/appointment_repository.dart';
+import 'package:salon_booking_mobile/features/appointments/models/appointment.dart';
+import 'package:salon_booking_mobile/features/appointments/models/cancellation_notice.dart';
 import 'package:salon_booking_mobile/features/appointments/models/appointment_status.dart';
 import 'package:salon_booking_mobile/features/appointments/screens/create_appointment_screen.dart';
 import 'package:salon_booking_mobile/features/customers/data/customer_repository.dart';
@@ -14,6 +18,7 @@ import 'package:salon_booking_mobile/features/reception/widgets/walk_in_dialog.d
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  tearDown(AuthSession.instance.clear);
 
   Future<void> pumpDesk(WidgetTester tester, ReceptionRepository repository, Size size) async {
     await tester.binding.setSurfaceSize(size);
@@ -35,7 +40,7 @@ void main() {
   testWidgets('desk stays readable on a phone width', (tester) async {
     await pumpDesk(tester, ReceptionRepository(), const Size(390, 800));
 
-    expect(find.text('Reception Desk'), findsWidgets);
+    expect(find.text('Front Desk'), findsWidgets);
     expect(find.byType(DataTable), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -236,6 +241,44 @@ void main() {
 
     expect(find.text('Sarah Perera (CUS-002)'), findsOneWidget);
   });
+
+  testWidgets('a pending cancellation is visible and disappears after approval', (tester) async {
+    AuthSession.instance.save(
+      accessToken: 'token',
+      username: 'manager',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      permissions: {'appointments.read', 'appointments.manage'},
+    );
+    final appointments = _QuietAppointments();
+    final repository = _ResolvingDesk(appointments);
+    await pumpDesk(tester, repository, const Size(500, 1600));
+
+    expect(find.text('Cancellation Request'), findsWidgets);
+    expect(find.text('Confirm'), findsOneWidget);
+    final approve = find.text('Approve cancellation');
+    expect(approve, findsOneWidget);
+    await tester.ensureVisible(approve);
+    await tester.tap(approve);
+    await tester.pumpAndSettle();
+
+    expect(appointments.approvals, 1);
+    expect(find.text('Cancellation Request'), findsNothing);
+    expect(find.text('Confirm'), findsNothing);
+  });
+
+  testWidgets('reception hides the decision when the user cannot manage appointments', (tester) async {
+    await pumpDesk(
+      tester,
+      _FixedDesk([
+        _visit(id: 9, name: 'Maya Fernando', mobile: '0773333333', status: AppointmentStatus.confirmed, cancellationRequested: true),
+      ]),
+      const Size(500, 900),
+    );
+
+    expect(find.text('Cancellation Request'), findsOneWidget);
+    expect(find.text('Approve cancellation'), findsNothing);
+    expect(find.text('Check in'), findsOneWidget);
+  });
 }
 
 Future<Completer<WalkInChoice?>> _openWalkIn(WidgetTester tester, CustomerRepository customers) async {
@@ -266,6 +309,7 @@ ReceptionVisit _visit({
   required String name,
   required String mobile,
   required AppointmentStatus status,
+  bool cancellationRequested = false,
 }) {
   return ReceptionVisit(
     appointmentId: id,
@@ -277,6 +321,7 @@ ReceptionVisit _visit({
     services: 'Haircut (30m)',
     employee: 'Amal',
     status: status,
+    cancellationRequested: cancellationRequested,
   );
 }
 
@@ -294,6 +339,70 @@ Customer _customer({
     mobileNumber: mobile,
     createdDate: DateTime(2026, 10, 11),
   );
+}
+
+class _QuietAppointments extends AppointmentRepository {
+  int approvals = 0;
+  bool pending = true;
+
+  @override
+  Future<List<CancellationNotice>> listCancellationRequests() async {
+    if (!pending) return const [];
+    return [
+      CancellationNotice(
+        notificationType: 'CancellationRequest',
+        appointmentId: 9,
+        customerName: 'Maya Fernando',
+        serviceNames: const ['Haircut'],
+        serviceName: 'Haircut',
+        appointmentDate: DateTime(2026, 10, 11),
+        appointmentTime: DateTime(2026, 10, 11, 9),
+        branchId: 1,
+        branchName: 'Negombo',
+        requestedAt: DateTime(2026, 10, 10, 8),
+        requestState: 'Requested',
+      ),
+    ];
+  }
+
+  @override
+  Future<Appointment> approveCancellation({required int appointmentId}) async {
+    approvals++;
+    pending = false;
+    return Appointment(
+      appointmentId: appointmentId,
+      branchId: 1,
+      customerId: 9,
+      appointmentDate: DateTime(2026, 10, 11),
+      startTime: const TimeOfDay(hour: 9, minute: 0),
+      endTime: const TimeOfDay(hour: 9, minute: 30),
+      employeeId: 0,
+      status: AppointmentStatus.cancelled,
+      appointmentServices: const [],
+    );
+  }
+}
+
+class _ResolvingDesk extends ReceptionRepository {
+  _ResolvingDesk(this.api) : super(appointments: api);
+
+  final _QuietAppointments api;
+
+  @override
+  Future<ReceptionDay> load({DateTime? date}) async {
+    return ReceptionDay(
+      date: DateTime(2026, 10, 11),
+      visits: [
+        _visit(
+          id: 9,
+          name: 'Maya Fernando',
+          mobile: '0773333333',
+          status: api.pending ? AppointmentStatus.pending : AppointmentStatus.cancelled,
+          cancellationRequested: api.pending,
+        ),
+      ],
+    );
+  }
 }
 
 class _FixedDesk extends ReceptionRepository {

@@ -180,6 +180,7 @@ class ReceptionRepository {
       status: appointment.status,
       priceLabel: total == null ? null : CurrencyFormatter.formatWithSymbol(total),
       notes: appointment.notes,
+      cancellationRequested: appointment.cancellationPending,
     );
   }
 

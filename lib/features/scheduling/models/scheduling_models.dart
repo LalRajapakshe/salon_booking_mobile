@@ -63,12 +63,14 @@ class UnscheduledVisit {
   final String customerName;
   final String status;
   final String servicesLabel;
+  final bool cancellationRequested;
 
   const UnscheduledVisit({
     required this.reference,
     required this.customerName,
     required this.status,
     required this.servicesLabel,
+    this.cancellationRequested = false,
   });
 }
 
@@ -78,6 +80,7 @@ class SchedulingAppointment {
   final DateTime date;
   final String status;
   final List<SchedulingServiceSegment> services;
+  final bool cancellationRequested;
 
   const SchedulingAppointment({
     required this.reference,
@@ -85,6 +88,7 @@ class SchedulingAppointment {
     required this.date,
     required this.status,
     required this.services,
+    this.cancellationRequested = false,
   });
 
   int get startMinute =>
@@ -109,6 +113,7 @@ class SchedulingAppointment {
           title: customerName,
           subtitle: segment.serviceName,
           status: status,
+          cancellationRequested: cancellationRequested,
           conflict: segment.conflict,
           notice: segment.durationMismatch
               ? 'Duration ${segment.durationMinutes} min does not match this time.'
@@ -129,6 +134,7 @@ class SchedulingBlock {
   final String title;
   final String subtitle;
   final String? status;
+  final bool cancellationRequested;
   final bool conflict;
   final String? notice;
 
@@ -143,6 +149,7 @@ class SchedulingBlock {
     required this.title,
     required this.subtitle,
     this.status,
+    this.cancellationRequested = false,
     this.conflict = false,
     this.notice,
   });

@@ -3,6 +3,8 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/auth/auth_session.dart';
 import '../api/appointment_api_mapper.dart';
 import '../models/appointment.dart';
+import '../models/allocation_recommendation.dart';
+import '../models/cancellation_notice.dart';
 import '../models/appointment_service_line.dart';
 import '../models/appointment_status.dart';
 import '../services/appointment_catalog.dart';
@@ -168,6 +170,62 @@ class AppointmentRepository {
       await _client.postJson('/api/Appointments/$appointmentId/status', {
         'status': statusName,
       }),
+    );
+    if (updated.appointmentId <= 0) {
+      throw const ApiException('The server returned an unexpected response.');
+    }
+    return updated;
+  }
+
+  /// Approves a customer cancellation by cancelling the appointment.
+  Future<Appointment> approveCancellation({required int appointmentId}) async {
+    final updated = AppointmentApiMapper.appointment(
+      await _client.postJson('/api/Appointments/$appointmentId/approve-cancellation', {}),
+    );
+    if (updated.appointmentId <= 0) {
+      throw const ApiException('The server returned an unexpected response.');
+    }
+    return updated;
+  }
+
+  /// Pending customer cancellation requests for this user's tenant and branch.
+  Future<List<CancellationNotice>> listCancellationRequests() async {
+    if (!_session.isSignedIn) return const [];
+    final body = await _client.getJsonList('/api/Appointments/notifications');
+    return [
+      for (final item in body)
+        if (item is Map) CancellationNotice.fromJson(Map<String, dynamic>.from(item)),
+    ];
+  }
+
+  Future<AllocationRecommendation> recommendAllocation(int appointmentId) async {
+    return AllocationRecommendation.fromJson(
+      await _client.getJson('/api/Appointments/$appointmentId/allocation-recommendations'),
+    );
+  }
+
+  Future<void> applyAllocation({
+    required int appointmentId,
+    required AllocationOption option,
+  }) async {
+    await _client.postJson('/api/Appointments/$appointmentId/allocate', {
+      'lines': [
+        for (final line in option.lines)
+          {
+            'appointmentServiceId': line.appointmentServiceId,
+            'employeeId': line.employeeId,
+            'startTime': _timestamp(line.startTime),
+            'endTime': _timestamp(line.endTime),
+            'rowVersion': line.rowVersion,
+          },
+      ],
+    });
+  }
+
+  /// Leaves the appointment status unchanged and records the decline.
+  Future<Appointment> declineCancellation({required int appointmentId}) async {
+    final updated = AppointmentApiMapper.appointment(
+      await _client.postJson('/api/Appointments/$appointmentId/decline-cancellation', {}),
     );
     if (updated.appointmentId <= 0) {
       throw const ApiException('The server returned an unexpected response.');

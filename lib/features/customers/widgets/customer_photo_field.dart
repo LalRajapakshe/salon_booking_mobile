@@ -7,7 +7,7 @@ import '../photos/customer_camera_stub.dart'
     if (dart.library.js_interop) '../photos/customer_camera_web.dart';
 import '../photos/customer_photo_store.dart';
 
-/// Optional photo picker used by customer registration and later by Reception Desk.
+/// Optional photo picker used by customer registration and later by Front Desk.
 class CustomerPhotoField extends StatefulWidget {
   final Uint8List? bytes;
   final String? errorText;

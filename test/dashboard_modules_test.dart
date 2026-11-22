@@ -8,7 +8,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const quickActionTitles = [
-    'Reception Desk',
+    'Front Desk',
     'Appointment',
     'Appointment Service',
     'Appointment Status History',

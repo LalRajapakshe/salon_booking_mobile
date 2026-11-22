@@ -67,6 +67,7 @@ class SchedulingBoardMapper {
               customerName: customerName,
               status: appointment.status.label,
               servicesLabel: waiting.isEmpty ? 'No services' : waiting.join(', '),
+              cancellationRequested: appointment.cancellationPending,
             ),
           );
         }
@@ -79,6 +80,7 @@ class SchedulingBoardMapper {
           date: DateTime(day.year, day.month, day.day),
           status: appointment.status.label,
           services: segments,
+          cancellationRequested: appointment.cancellationPending,
         ),
       );
     }
