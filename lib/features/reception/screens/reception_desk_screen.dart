@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../../core/api/api_exception.dart';
+import '../../../core/auth/access_token_claims.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../shared/theme/app_colors.dart';
 import '../../../shared/widgets/app_snackbar.dart';
@@ -9,6 +10,8 @@ import '../../appointments/screens/create_appointment_screen.dart';
 import '../../appointments/widgets/appointment_status_badge.dart';
 import '../../appointments/widgets/cancellation_queue_button.dart';
 import '../../appointments/widgets/cancellation_request_mark.dart';
+import '../../branches/data/branch_repository.dart';
+import '../../branches/models/branch_record.dart';
 import '../data/reception_repository.dart';
 import '../models/reception_visit.dart';
 import '../widgets/check_in_dialog.dart';
@@ -33,6 +36,8 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
   final ValueNotifier<int> _queueRefresh = ValueNotifier<int>(0);
 
   ReceptionDay? _day;
+  List<BranchRecord> _branches = const [];
+  int _branchId = 0;
   String? _error;
   bool _loading = true;
   _DeskFilter _filter = _DeskFilter.today;
@@ -57,7 +62,15 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
       _error = null;
     });
     try {
-      final day = await _repository.load();
+      if (_selectBranch && _branches.isEmpty) {
+        final branches = await BranchRepository().list();
+        if (!mounted) return;
+        _branches = [
+          for (final branch in branches)
+            if (branch.isActive && branch.id > 0) branch,
+        ];
+      }
+      final day = await _repository.load(branchId: _selectedBranchId);
       if (!mounted) return;
       setState(() {
         _day = day;
@@ -72,6 +85,11 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
       });
     }
   }
+
+  bool get _selectBranch =>
+      AccessTokenClaims.needsExplicitBranch(AuthSession.instance.accessToken);
+
+  int? get _selectedBranchId => !_selectBranch || _branchId <= 0 ? null : _branchId;
 
   List<ReceptionVisit> get _visible {
     final visits = _day?.visits ?? const <ReceptionVisit>[];
@@ -174,6 +192,9 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
             if (visit.cancellationRequested) ...[
               const SizedBox(height: 8),
               const CancellationRequestMark(),
+            ] else if (visit.awaitingConfirmation) ...[
+              const SizedBox(height: 8),
+              const CancellationRequestMark.awaiting(),
             ],
           ],
         ),
@@ -213,6 +234,7 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
           CancellationQueueButton(
             repository: _repository.appointments,
             refreshSignal: _queueRefresh,
+            branchId: _selectedBranchId,
             onResolved: _load,
           ),
         ],
@@ -227,6 +249,23 @@ class _ReceptionDeskScreenState extends State<ReceptionDeskScreen> {
                     return ListView(
                       padding: const EdgeInsets.all(16),
                       children: [
+                        if (_selectBranch && _branches.isNotEmpty) ...[
+                          DropdownButton<int>(
+                            isExpanded: true,
+                            value: _branchId,
+                            items: [
+                              const DropdownMenuItem(value: 0, child: Text('All Branches')),
+                              for (final branch in _branches)
+                                DropdownMenuItem(value: branch.id, child: Text(branch.branchName)),
+                            ],
+                            onChanged: (value) {
+                              if (value == null || value == _branchId) return;
+                              setState(() => _branchId = value);
+                              _load();
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                        ],
                         _Header(wide: wide, onWalkIn: _walkIn, day: day),
                         if (day?.sampleDay == true) ...[
                           const SizedBox(height: 12),
@@ -481,7 +520,10 @@ class _VisitTable extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     AppointmentStatusBadge(status: visit.status),
-                    if (visit.cancellationRequested) const CancellationRequestMark(),
+                    if (visit.cancellationRequested)
+                      const CancellationRequestMark()
+                    else if (visit.awaitingConfirmation)
+                      const CancellationRequestMark.awaiting(),
                   ],
                 )),
                 DataCell(_Actions(
@@ -532,6 +574,9 @@ class _VisitCard extends StatelessWidget {
             if (visit.cancellationRequested) ...[
               const SizedBox(height: 8),
               const CancellationRequestMark(),
+            ] else if (visit.awaitingConfirmation) ...[
+              const SizedBox(height: 8),
+              const CancellationRequestMark.awaiting(),
             ],
             _Actions(
               visit: visit,
@@ -568,9 +613,9 @@ class _Actions extends StatelessWidget {
       spacing: 4,
       children: [
         TextButton(onPressed: () => onView(visit), child: const Text('View')),
-        if (visit.canConfirm)
+        if (visit.canConfirm && AuthSession.instance.can('appointments.manage'))
           TextButton(onPressed: () => onConfirm(visit), child: const Text('Confirm')),
-        if (visit.canCheckIn)
+        if (visit.canCheckIn && AuthSession.instance.can('appointments.manage'))
           TextButton(onPressed: () => onCheckIn(visit), child: const Text('Check in')),
         if (visit.cancellationRequested && AuthSession.instance.can('appointments.manage')) ...[
           TextButton(

@@ -15,6 +15,7 @@ class AppointmentServiceLine {
   final int? sequence;
   final String? notes;
   final bool isCancelled;
+  final String lineStatus;
   final bool isFullyScheduled;
   final String? rowVersion;
   final String? serviceName;
@@ -33,6 +34,7 @@ class AppointmentServiceLine {
     this.sequence,
     this.notes,
     this.isCancelled = false,
+    this.lineStatus = 'Pending',
     this.isFullyScheduled = false,
     this.rowVersion,
     this.serviceName,

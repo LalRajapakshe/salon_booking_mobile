@@ -15,6 +15,10 @@ Future<void> showAppointmentSchedulePanel({
   Future<void> Function(SchedulingServiceSegment segment)? onChangeEmployeeLine,
   Future<void> Function()? onApproveCancellation,
   Future<void> Function()? onDeclineCancellation,
+  Future<void> Function()? onConfirm,
+  Future<void> Function(SchedulingServiceSegment segment)? onStartLine,
+  Future<void> Function(SchedulingServiceSegment segment)? onFinishLine,
+  Future<void> Function(SchedulingServiceSegment segment)? onLineHistory,
 }) {
   return showDialog<void>(
     context: context,
@@ -63,6 +67,21 @@ Future<void> showAppointmentSchedulePanel({
                 Navigator.of(dialogContext).pop();
                 onDeclineCancellation();
               },
+        onConfirm: onConfirm == null
+            ? null
+            : () {
+                Navigator.of(dialogContext).pop();
+                onConfirm();
+              },
+        onStart: onStartLine == null
+            ? null
+            : () => closeAndRun(onStartLine, 'Start noted for ${appointment.reference}.'),
+        onFinish: onFinishLine == null
+            ? null
+            : () => closeAndRun(onFinishLine, 'Finish noted for ${appointment.reference}.'),
+        onHistory: onLineHistory == null
+            ? null
+            : () => closeAndRun(onLineHistory, 'History noted for ${appointment.reference}.'),
       );
     },
   );
@@ -77,6 +96,10 @@ class AppointmentSchedulePanel extends StatelessWidget {
   final VoidCallback onChangeEmployee;
   final VoidCallback? onApproveCancellation;
   final VoidCallback? onDeclineCancellation;
+  final VoidCallback? onConfirm;
+  final VoidCallback? onStart;
+  final VoidCallback? onFinish;
+  final VoidCallback? onHistory;
 
   const AppointmentSchedulePanel({
     super.key,
@@ -88,6 +111,10 @@ class AppointmentSchedulePanel extends StatelessWidget {
     required this.onChangeEmployee,
     this.onApproveCancellation,
     this.onDeclineCancellation,
+    this.onConfirm,
+    this.onStart,
+    this.onFinish,
+    this.onHistory,
   });
 
   @override
@@ -147,8 +174,43 @@ class AppointmentSchedulePanel extends StatelessWidget {
               if (appointment.cancellationRequested) ...[
                 const SizedBox(height: 12),
                 const CancellationRequestMark(),
+              ] else if (appointment.awaitingConfirmation) ...[
+                const SizedBox(height: 12),
+                CancellationRequestMark.awaiting(onPressed: onConfirm),
               ],
               const SizedBox(height: 20),
+              if (onConfirm != null) ...[
+                AppPrimaryButton(
+                  text: 'Confirm Appointment',
+                  icon: Icons.event_available,
+                  onPressed: onConfirm!,
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (onStart != null) ...[
+                AppPrimaryButton(
+                  text: 'Start service',
+                  icon: Icons.play_arrow,
+                  onPressed: onStart!,
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (onFinish != null) ...[
+                AppPrimaryButton(
+                  text: 'Finish service',
+                  icon: Icons.task_alt,
+                  onPressed: onFinish!,
+                ),
+                const SizedBox(height: 10),
+              ],
+              if (onHistory != null) ...[
+                AppSecondaryButton(
+                  text: 'Service history',
+                  icon: Icons.history,
+                  onPressed: onHistory!,
+                ),
+                const SizedBox(height: 10),
+              ],
               if (onApproveCancellation != null && onDeclineCancellation != null) ...[
                 AppSecondaryButton(
                   text: 'Decline cancellation',
@@ -208,6 +270,10 @@ class AppointmentSchedulePanel extends StatelessWidget {
           Text(
             '${segment.durationMinutes} min · $staffName',
             style: const TextStyle(color: Color(0xFF616161), fontSize: 13),
+          ),
+          Text(
+            segment.lineStatus,
+            style: const TextStyle(color: Color(0xFF5E548E), fontSize: 12),
           ),
           Text(
             formatScheduleRange(segment.startMinute, segment.endMinute),

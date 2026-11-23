@@ -4,13 +4,15 @@ import '../../../core/api/api_exception.dart';
 import '../../../core/auth/auth_session.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../data/appointment_repository.dart';
+import '../models/appointment_status.dart';
 import '../models/cancellation_notice.dart';
 import 'allocation_screen.dart';
 
 class CancellationQueueScreen extends StatefulWidget {
-  const CancellationQueueScreen({super.key, required this.repository});
+  const CancellationQueueScreen({super.key, required this.repository, this.branchId});
 
   final AppointmentRepository repository;
+  final int? branchId;
 
   @override
   State<CancellationQueueScreen> createState() => _CancellationQueueScreenState();
@@ -36,10 +38,13 @@ class _CancellationQueueScreenState extends State<CancellationQueueScreen> {
       _error = null;
     });
     try {
-      final items = await widget.repository.listCancellationRequests();
+      final items = await widget.repository.listCancellationRequests(branchId: widget.branchId);
       if (!mounted) return;
       setState(() {
-        _items = [for (final item in items) if (item.isPending) item];
+        _items = [
+          for (final item in items)
+            if (item.isPending && !(item.isPast && (item.isNewBooking || item.isAwaitingConfirmation))) item,
+        ];
         _loading = false;
       });
     } on ApiException catch (error) {
@@ -48,6 +53,24 @@ class _CancellationQueueScreenState extends State<CancellationQueueScreen> {
         _loading = false;
         _error = error.message;
       });
+    }
+  }
+
+  Future<void> _confirm(CancellationNotice notice) async {
+    if (!_canManage) return;
+    try {
+      await widget.repository.changeStatus(
+        appointmentId: notice.appointmentId,
+        status: AppointmentStatus.confirmed,
+      );
+      if (!mounted) return;
+      _changed = true;
+      AppSnackBar.success(context, 'Appointment confirmed.');
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+      await _load();
     }
   }
 
@@ -114,7 +137,15 @@ class _CancellationQueueScreenState extends State<CancellationQueueScreen> {
         ),
         actions: [
           TextButton(onPressed: () => Navigator.of(dialogContext).pop(), child: const Text('Close')),
-          if (_canManage) ...[
+          if (notice.isAwaitingConfirmation && _canManage && !notice.isPast)
+            FilledButton(
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+                _confirm(notice);
+              },
+              child: const Text('Confirm Appointment'),
+            ),
+          if (notice.isCancellation && _canManage) ...[
             TextButton(
               onPressed: () {
                 Navigator.of(dialogContext).pop();
@@ -180,20 +211,35 @@ class _CancellationQueueScreenState extends State<CancellationQueueScreen> {
 
   Widget _countBar() {
     final bookings = _items.where((item) => item.isNewBooking).length;
+    final waiting = _items.where((item) => item.isAwaitingConfirmation).length;
     final cancellations = _items.where((item) => item.isCancellation).length;
     String label(int count, String one, String many) => '$count ${count == 1 ? one : many}';
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
       child: Text(
-        '${label(bookings, 'new booking', 'new bookings')} · ${label(cancellations, 'cancellation request', 'cancellation requests')}',
+        '${label(bookings, 'new booking', 'new bookings')} · ${label(waiting, 'awaiting confirmation', 'awaiting confirmation')} · ${label(cancellations, 'cancellation request', 'cancellation requests')}',
       ),
     );
   }
 
   Widget _tile(CancellationNotice notice) {
     final booking = notice.isNewBooking;
-    final color = booking ? const Color(0xFF1565C0) : const Color(0xFFC62828);
-    final background = booking ? const Color(0xFFE3F2FD) : const Color(0xFFFFEBEE);
+    final waiting = notice.isAwaitingConfirmation;
+    final color = booking
+        ? const Color(0xFF1565C0)
+        : waiting
+            ? const Color(0xFFF9A825)
+            : const Color(0xFFC62828);
+    final background = booking
+        ? const Color(0xFFE3F2FD)
+        : waiting
+            ? const Color(0xFFFFF8E1)
+            : const Color(0xFFFFEBEE);
+    final chip = booking
+        ? 'New Booking'
+        : waiting
+            ? 'Awaiting Confirmation'
+            : 'Cancellation Request';
     final when = notice.appointmentTime;
     final time = when == null
         ? 'Time not set'
@@ -206,7 +252,7 @@ class _CancellationQueueScreenState extends State<CancellationQueueScreen> {
         '${notice.serviceName} · ${_date(notice.appointmentDate)} $time · ${notice.branchName}',
       ),
       leading: Chip(
-        label: Text(booking ? 'New Booking' : 'Cancellation Request'),
+        label: Text(chip),
         backgroundColor: background,
         labelStyle: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 11),
         visualDensity: VisualDensity.compact,

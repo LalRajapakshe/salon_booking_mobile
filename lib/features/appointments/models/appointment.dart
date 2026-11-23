@@ -40,11 +40,25 @@ class Appointment {
         _ => true,
       };
 
+  /// A visit before today in salon-local time. Same-day visits stay active.
+  bool get isPast {
+    final day = DateTime(appointmentDate.year, appointmentDate.month, appointmentDate.day);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return day.isBefore(today);
+  }
+
   /// Edit is open only before a time slot is allocated and before confirmation.
-  bool get canEdit => !slotAllocated && !customerConfirmed;
+  bool get canEdit => !isPast && !slotAllocated && !customerConfirmed;
 
   bool get cancellationPending =>
       cancellationRequest == 'Requested' || cancellationRequest == 'AwaitingApproval';
+
+  bool get awaitingConfirmation =>
+      !isPast &&
+      !cancellationPending &&
+      schedulingState == 'Scheduled' &&
+      (status == AppointmentStatus.pending || status == AppointmentStatus.scheduled);
 
   const Appointment({
     required this.appointmentId,

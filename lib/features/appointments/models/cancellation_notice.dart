@@ -33,7 +33,17 @@ class CancellationNotice {
 
   bool get isNewBooking => notificationType == 'NewBooking';
 
-  bool get isPending => isNewBooking || requestState == 'Requested' || requestState == 'AwaitingApproval';
+  bool get isAwaitingConfirmation => notificationType == 'AwaitingConfirmation';
+
+  bool get isPast {
+    final day = DateTime(appointmentDate.year, appointmentDate.month, appointmentDate.day);
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    return day.isBefore(today);
+  }
+
+  bool get isPending =>
+      isNewBooking || isAwaitingConfirmation || requestState == 'Requested' || requestState == 'AwaitingApproval';
 
   factory CancellationNotice.fromJson(Map<String, dynamic> json) {
     final names = json['serviceNames'];

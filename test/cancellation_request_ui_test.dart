@@ -65,7 +65,7 @@ Map<String, Object?> _page() {
         'appointmentId': 10,
         'branchId': 2,
         'customerId': 4,
-        'appointmentDate': '2026-11-22',
+        'appointmentDate': '2026-12-01',
         'status': 'Pending',
         'cancellationRequest': 'Requested',
         'services': [

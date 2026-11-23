@@ -77,7 +77,29 @@ void main() {
     expect(find.text('Try again'), findsOneWidget);
   });
 
+  testWidgets('confirm and check-in stay hidden without appointments.manage', (tester) async {
+    AuthSession.instance.save(
+      accessToken: 'token',
+      username: 'reader',
+      expiresAt: DateTime.now().add(const Duration(hours: 1)),
+      permissions: {'appointments.read'},
+    );
+    await pumpDesk(
+      tester,
+      _FixedDesk([
+        _visit(id: 1, name: 'Nimal Perera', mobile: '0771111111', status: AppointmentStatus.pending),
+        _visit(id: 6, name: 'Kasun Silva', mobile: '0773333333', status: AppointmentStatus.confirmed),
+      ]),
+      const Size(500, 900),
+    );
+
+    expect(find.text('Confirm'), findsNothing);
+    expect(find.text('Check in'), findsNothing);
+    expect(find.text('View'), findsWidgets);
+  });
+
   testWidgets('a pending appointment can be confirmed once', (tester) async {
+    _signInDesk();
     final repository = _SlowConfirm();
     await pumpDesk(tester, repository, const Size(500, 900));
 
@@ -99,6 +121,7 @@ void main() {
   });
 
   testWidgets('a confirmed appointment has no confirm action', (tester) async {
+    _signInDesk();
     await pumpDesk(
       tester,
       _FixedDesk([
@@ -112,6 +135,7 @@ void main() {
   });
 
   testWidgets('check-in asks for confirmation and does not repeat the request', (tester) async {
+    _signInDesk();
     final repository = _SlowCheckIn();
     await pumpDesk(tester, repository, const Size(500, 900));
 
@@ -133,6 +157,7 @@ void main() {
   });
 
   testWidgets('a failed check-in stays on the confirmation', (tester) async {
+    _signInDesk();
     final repository = _FixedDesk([
       _visit(id: 4, name: 'Kasun Silva', mobile: '0773333333', status: AppointmentStatus.confirmed),
     ], checkInError: const ApiException('The appointment already has that status.'));
@@ -149,6 +174,7 @@ void main() {
   });
 
   testWidgets('an unexpected check-in failure stays on the confirmation', (tester) async {
+    _signInDesk();
     final repository = _FixedDesk([
       _visit(id: 4, name: 'Kasun Silva', mobile: '0773333333', status: AppointmentStatus.confirmed),
     ], checkInError: StateError('socket closed'));
@@ -277,8 +303,41 @@ void main() {
 
     expect(find.text('Cancellation Request'), findsOneWidget);
     expect(find.text('Approve cancellation'), findsNothing);
-    expect(find.text('Check in'), findsOneWidget);
+    expect(find.text('Decline cancellation'), findsNothing);
+    expect(find.text('Check in'), findsNothing);
   });
+
+  testWidgets('an authorized desk keeps confirm, check-in, and cancellation decisions', (tester) async {
+    _signInDesk();
+    await pumpDesk(
+      tester,
+      _FixedDesk([
+        _visit(id: 1, name: 'Nimal Perera', mobile: '0771111111', status: AppointmentStatus.pending),
+        _visit(
+          id: 9,
+          name: 'Maya Fernando',
+          mobile: '0773333333',
+          status: AppointmentStatus.confirmed,
+          cancellationRequested: true,
+        ),
+      ]),
+      const Size(500, 1400),
+    );
+
+    expect(find.text('Confirm'), findsOneWidget);
+    expect(find.text('Check in'), findsNWidgets(2));
+    expect(find.text('Approve cancellation'), findsOneWidget);
+    expect(find.text('Decline cancellation'), findsOneWidget);
+  });
+}
+
+void _signInDesk() {
+  AuthSession.instance.save(
+    accessToken: 'token',
+    username: 'desk',
+    expiresAt: DateTime.now().add(const Duration(hours: 1)),
+    permissions: {'appointments.read', 'appointments.manage'},
+  );
 }
 
 Future<Completer<WalkInChoice?>> _openWalkIn(WidgetTester tester, CustomerRepository customers) async {
@@ -346,7 +405,7 @@ class _QuietAppointments extends AppointmentRepository {
   bool pending = true;
 
   @override
-  Future<List<CancellationNotice>> listCancellationRequests() async {
+  Future<List<CancellationNotice>> listCancellationRequests({int? branchId}) async {
     if (!pending) return const [];
     return [
       CancellationNotice(
@@ -389,7 +448,7 @@ class _ResolvingDesk extends ReceptionRepository {
   final _QuietAppointments api;
 
   @override
-  Future<ReceptionDay> load({DateTime? date}) async {
+  Future<ReceptionDay> load({DateTime? date, int? branchId}) async {
     return ReceptionDay(
       date: DateTime(2026, 10, 11),
       visits: [
@@ -412,7 +471,7 @@ class _FixedDesk extends ReceptionRepository {
   final Object? checkInError;
 
   @override
-  Future<ReceptionDay> load({DateTime? date}) async {
+  Future<ReceptionDay> load({DateTime? date, int? branchId}) async {
     return ReceptionDay(date: DateTime(2026, 10, 11), visits: visits);
   }
 
@@ -425,7 +484,7 @@ class _FixedDesk extends ReceptionRepository {
 
 class _FailingDesk extends ReceptionRepository {
   @override
-  Future<ReceptionDay> load({DateTime? date}) async {
+  Future<ReceptionDay> load({DateTime? date, int? branchId}) async {
     throw const ApiException('The appointment list could not be loaded.');
   }
 }
@@ -435,7 +494,7 @@ class _SlowConfirm extends ReceptionRepository {
   int calls = 0;
 
   @override
-  Future<ReceptionDay> load({DateTime? date}) async {
+  Future<ReceptionDay> load({DateTime? date, int? branchId}) async {
     return ReceptionDay(
       date: DateTime(2026, 10, 11),
       visits: [
@@ -460,7 +519,7 @@ class _SlowCheckIn extends ReceptionRepository {
   int calls = 0;
 
   @override
-  Future<ReceptionDay> load({DateTime? date}) async {
+  Future<ReceptionDay> load({DateTime? date, int? branchId}) async {
     return ReceptionDay(
       date: DateTime(2026, 10, 11),
       visits: [

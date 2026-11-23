@@ -66,6 +66,9 @@ class AppointmentScheduleCard extends StatelessWidget {
                               if (block.cancellationRequested) ...[
                                 const CancellationRequestMark(),
                                 const SizedBox(height: 2),
+                              ] else if (block.awaitingConfirmation) ...[
+                                const CancellationRequestMark.awaiting(),
+                                const SizedBox(height: 2),
                               ],
                               Text(
                                 block.title,

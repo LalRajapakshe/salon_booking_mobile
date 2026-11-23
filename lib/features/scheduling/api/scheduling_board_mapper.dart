@@ -68,6 +68,7 @@ class SchedulingBoardMapper {
               status: appointment.status.label,
               servicesLabel: waiting.isEmpty ? 'No services' : waiting.join(', '),
               cancellationRequested: appointment.cancellationPending,
+              awaitingConfirmation: appointment.awaitingConfirmation,
             ),
           );
         }
@@ -81,6 +82,7 @@ class SchedulingBoardMapper {
           status: appointment.status.label,
           services: segments,
           cancellationRequested: appointment.cancellationPending,
+          awaitingConfirmation: appointment.awaitingConfirmation,
         ),
       );
     }
@@ -120,6 +122,7 @@ class SchedulingBoardMapper {
       serviceId: line.serviceId,
       employeeId: employeeId,
       rowVersion: line.rowVersion,
+      lineStatus: line.lineStatus,
       durationMismatch: duration != null && duration != span,
     );
   }

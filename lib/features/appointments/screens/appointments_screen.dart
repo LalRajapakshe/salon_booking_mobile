@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/auth/auth_session.dart';
+import '../../../core/auth/staff_access.dart';
 import '../../../shared/utils/date_formatter.dart';
 import '../../../shared/widgets/app_dialog.dart';
 import '../../../shared/widgets/app_snackbar.dart';
@@ -10,6 +11,7 @@ import '../../services/data/service_repository.dart';
 import '../data/appointment_repository.dart';
 import '../data/availability_repository.dart';
 import '../models/appointment.dart';
+import '../models/appointment_service_line.dart';
 import '../models/appointment_status.dart';
 import '../models/appointment_time.dart';
 import '../services/appointment_catalog.dart';
@@ -196,7 +198,9 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         if (!appointment.canEdit)
           (
             label: 'Edit',
-            value: appointment.slotAllocated && !appointment.customerConfirmed
+            value: appointment.isPast
+                ? 'Closed. This date has passed.'
+                : appointment.slotAllocated && !appointment.customerConfirmed
                 ? 'Closed. A time slot is already allocated.'
                 : 'Closed. The customer confirmation is already done.',
           ),
@@ -206,10 +210,95 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
 
   bool get _canManageAppointments => AuthSession.instance.can('appointments.manage');
 
+  bool _canStart(AppointmentServiceLine line) =>
+      line.lineStatus == 'Assigned' &&
+      StaffAccess.canProgressLine(AuthSession.instance, line.employeeId);
+
+  bool _canFinish(AppointmentServiceLine line) =>
+      line.lineStatus == 'InProgress' &&
+      StaffAccess.canProgressLine(AuthSession.instance, line.employeeId);
+
+  bool _canReadHistory(AppointmentServiceLine line) =>
+      StaffAccess.canReadLineHistory(AuthSession.instance, line.employeeId);
+
+  String _lineName(AppointmentServiceLine line) {
+    final name = line.serviceName?.trim();
+    if (name != null && name.isNotEmpty) return name;
+    return 'service';
+  }
+
+  Future<void> _progressFromMenu(Appointment appointment, String action) async {
+    final split = action.split(':');
+    if (split.length != 2) return;
+    final lineId = int.tryParse(split[1]);
+    if (lineId == null) return;
+    AppointmentServiceLine? line;
+    for (final item in appointment.appointmentServices) {
+      if (item.appointmentServiceId == lineId) line = item;
+    }
+    if (line == null) return;
+    if (split[0] == 'history') {
+      await _showLineHistory(line);
+      return;
+    }
+    final start = split[0] == 'start';
+    if (start && !_canStart(line)) return;
+    if (!start && !_canFinish(line)) return;
+    try {
+      await _repository.progressLine(
+        appointmentId: appointment.appointmentId,
+        appointmentServiceId: line.appointmentServiceId,
+        action: start ? 'Start' : 'Finish',
+        rowVersion: line.rowVersion,
+      );
+      if (!mounted) return;
+      AppSnackBar.info(context, start ? 'Service started.' : 'Service finished.');
+      await _load(showSpinner: false);
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
+  }
+
+  Future<void> _showLineHistory(AppointmentServiceLine line) async {
+    try {
+      final history = await _repository.lineProgressHistory(
+        appointmentId: line.appointmentId,
+        appointmentServiceId: line.appointmentServiceId,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('${_lineName(line)} history'),
+          content: history.isEmpty
+              ? const Text('No progress history yet.')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final entry in history)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text('${entry.action}: ${entry.oldStatus ?? '—'} → ${entry.newStatus}'),
+                      ),
+                  ],
+                ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+          ],
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
+  }
+
   bool _canDecideCancellation(Appointment appointment) {
     final state = appointment.cancellationRequest;
     final waiting = state == 'Requested' || state == 'AwaitingApproval';
-    return _canManageAppointments && waiting;
+    return _canManageAppointments && waiting && !appointment.isPast;
   }
 
   String? _cancellationLabel(Appointment appointment) => switch (appointment.cancellationRequest) {
@@ -607,6 +696,8 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                         _decideCancellation(appointment, approve: true);
                       case 'decline-cancel':
                         _decideCancellation(appointment, approve: false);
+                      default:
+                        _progressFromMenu(appointment, action);
                     }
                   },
                   itemBuilder: (context) => [
@@ -619,10 +710,28 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       enabled: appointment.canEdit,
                       child: const Text('Edit'),
                     ),
-                    const PopupMenuItem<String>(
+                    PopupMenuItem<String>(
                       value: 'delete',
-                      child: Text('Delete'),
+                      enabled: !appointment.isPast,
+                      child: const Text('Delete'),
                     ),
+                    for (final line in appointment.appointmentServices) ...[
+                      if (_canStart(line))
+                        PopupMenuItem<String>(
+                          value: 'start:${line.appointmentServiceId}',
+                          child: Text('Start ${_lineName(line)}'),
+                        ),
+                      if (_canFinish(line))
+                        PopupMenuItem<String>(
+                          value: 'finish:${line.appointmentServiceId}',
+                          child: Text('Finish ${_lineName(line)}'),
+                        ),
+                      if (_canReadHistory(line))
+                        PopupMenuItem<String>(
+                          value: 'history:${line.appointmentServiceId}',
+                          child: Text('History ${_lineName(line)}'),
+                        ),
+                    ],
                     if (_canDecideCancellation(appointment)) ...[
                       const PopupMenuItem<String>(
                         value: 'approve-cancel',

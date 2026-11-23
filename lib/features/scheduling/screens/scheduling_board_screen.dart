@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../core/api/api_exception.dart';
 import '../../../core/auth/access_token_claims.dart';
 import '../../../core/auth/auth_session.dart';
+import '../../../core/auth/staff_access.dart';
 import '../../../shared/widgets/app_dropdown.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../appointments/data/appointment_repository.dart';
@@ -212,7 +213,16 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         return;
       }
       final branchId = _selectBranch ? _scheduleBranchId : null;
-      final appointments = await _repository.list(date: date, branchId: branchId);
+      var appointments = await _repository.list(date: date, branchId: branchId);
+      final ownEmployeeId = AuthSession.instance.employeeId;
+      if (ownEmployeeId != null && !AuthSession.instance.can('appointments.manage')) {
+        appointments = [
+          for (final appointment in appointments)
+            if (appointment.employeeId == ownEmployeeId ||
+                appointment.appointmentServices.any((line) => line.employeeId == ownEmployeeId))
+              appointment,
+        ];
+      }
       final directory = _useDirectory ? await _directory(branchId) : _BoardDirectory.empty;
       if (!mounted || date != _date || branchId != (_selectBranch ? _scheduleBranchId : null)) {
         return;
@@ -588,8 +598,14 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
         final appointment = _appointmentByReference(block.appointmentReference);
         if (appointment == null) return;
         final segment = _segmentFor(block);
-        final canDecide = AuthSession.instance.can('appointments.manage') &&
-            appointment.cancellationRequested;
+        final session = AuthSession.instance;
+        final canManage = session.can('appointments.manage');
+        final canDecide = canManage && appointment.cancellationRequested;
+        final canConfirm = canManage && appointment.awaitingConfirmation && !_demo;
+        final canProgress = segment != null &&
+            StaffAccess.canProgressLine(session, segment.employeeId);
+        final canHistory = segment != null &&
+            StaffAccess.canReadLineHistory(session, segment.employeeId);
         showAppointmentSchedulePanel(
           context: context,
           appointment: appointment,
@@ -602,6 +618,14 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
               : (line) => _scheduleLine(line, changeEmployee: true),
           onApproveCancellation: canDecide ? () => _decideCancellation(appointment, approve: true) : null,
           onDeclineCancellation: canDecide ? () => _decideCancellation(appointment, approve: false) : null,
+          onConfirm: canConfirm ? () => _confirmAppointment(appointment) : null,
+          onStartLine: segment != null && canProgress && segment.lineStatus == 'Assigned'
+              ? (line) => _progressLine(line, 'Start')
+              : null,
+          onFinishLine: segment != null && canProgress && segment.lineStatus == 'InProgress'
+              ? (line) => _progressLine(line, 'Finish')
+              : null,
+          onLineHistory: canHistory && !_demo ? _showLineHistory : null,
         );
       },
       onAvailableTap: (staff, startMinute) {
@@ -618,6 +642,106 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
           ),
       ],
     );
+  }
+
+  Future<void> _progressLine(SchedulingServiceSegment line, String action) async {
+    final appointmentId = line.appointmentId;
+    final serviceId = line.appointmentServiceId;
+    if (appointmentId == null || serviceId == null) return;
+    try {
+      await _repository.progressLine(
+        appointmentId: appointmentId,
+        appointmentServiceId: serviceId,
+        action: action,
+        rowVersion: line.rowVersion,
+      );
+      if (!mounted) return;
+      AppSnackBar.info(context, action == 'Start' ? 'Service started.' : 'Service finished.');
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
+  }
+
+  Future<void> _showLineHistory(SchedulingServiceSegment line) async {
+    final appointmentId = line.appointmentId;
+    final serviceId = line.appointmentServiceId;
+    if (appointmentId == null || serviceId == null) return;
+    try {
+      final history = await _repository.lineProgressHistory(
+        appointmentId: appointmentId,
+        appointmentServiceId: serviceId,
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('${line.serviceName} history'),
+          content: history.isEmpty
+              ? const Text('No progress history yet.')
+              : Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final entry in history)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Text(
+                          '${entry.action}: ${entry.oldStatus ?? '—'} → ${entry.newStatus}'
+                          '${entry.reason == null || entry.reason!.isEmpty ? '' : '\n${entry.reason}'}',
+                        ),
+                      ),
+                  ],
+                ),
+          actions: [
+            TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Close')),
+          ],
+        ),
+      );
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+    }
+  }
+
+  Future<void> _confirmAppointment(SchedulingAppointment appointment) async {
+    if (!AuthSession.instance.can('appointments.manage') || !appointment.awaitingConfirmation) return;
+    final id = int.tryParse(appointment.reference);
+    if (id == null) return;
+    final accepted = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Confirm appointment'),
+        content: Text(
+          '${appointment.customerName} is allocated and still pending. Confirm the scheduled time?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(true),
+            child: const Text('Confirm Appointment'),
+          ),
+        ],
+      ),
+    );
+    if (accepted != true || !mounted) return;
+    try {
+      await _repository.changeStatus(
+        appointmentId: id,
+        status: AppointmentStatus.confirmed,
+      );
+      if (!mounted) return;
+      AppSnackBar.success(context, 'Appointment confirmed.');
+      await _load();
+    } on ApiException catch (error) {
+      if (!mounted) return;
+      AppSnackBar.error(context, error.message);
+      await _load();
+    }
   }
 
   Future<void> _decideCancellation(SchedulingAppointment appointment, {required bool approve}) async {
@@ -669,6 +793,9 @@ class _SchedulingBoardScreenState extends State<SchedulingBoardScreen> {
             if (visit.cancellationRequested) ...[
               const SizedBox(height: 8),
               const CancellationRequestMark(),
+            ] else if (visit.awaitingConfirmation) ...[
+              const SizedBox(height: 8),
+              const CancellationRequestMark.awaiting(),
             ],
           ],
         ),

@@ -41,11 +41,12 @@ class ReceptionRepository {
 
   /// Today's appointments for the signed-in branch. A signed-out session
   /// shows the sample catalog day instead of inventing live records.
-  Future<ReceptionDay> load({DateTime? date}) async {
+  Future<ReceptionDay> load({DateTime? date, int? branchId}) async {
     if (!_session.isSignedIn) return _sampleDay();
 
     final day = _dateOnly(date ?? _clock());
-    final appointments = await _appointments.list(date: day);
+    final selectedBranch = branchId ?? (_session.branchId != null && _session.branchId! > 0 ? _session.branchId : null);
+    final appointments = await _appointments.list(date: day, branchId: selectedBranch);
     final names = await _lookups();
     return ReceptionDay(
       date: day,
@@ -181,6 +182,8 @@ class ReceptionRepository {
       priceLabel: total == null ? null : CurrencyFormatter.formatWithSymbol(total),
       notes: appointment.notes,
       cancellationRequested: appointment.cancellationPending,
+      awaitingConfirmation: appointment.awaitingConfirmation,
+      allocated: appointment.schedulingState == null || appointment.schedulingState == 'Scheduled',
     );
   }
 

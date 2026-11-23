@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../../core/auth/auth_session.dart';
+import '../../../core/auth/staff_access.dart';
 import '../../../shared/widgets/app_snackbar.dart';
 import '../../settings/screens/permissions_screen.dart';
 import '../../settings/screens/roles_screen.dart';
@@ -395,103 +396,129 @@ void _showComingSoon(BuildContext context, String moduleName) {
 }
 
 List<_DashboardItem> _quickActionItems(BuildContext context) {
+  final session = AuthSession.instance;
+  bool show(String permission) => !session.isSignedIn || session.can(permission);
   return [
+    if (show('appointments.read'))
     _DashboardItem(
       icon: Icons.desk,
       title: 'Front Desk',
       color: Colors.deepPurple,
       onTap: () => _openScreen(context, const ReceptionDeskScreen()),
     ),
+    if (show('appointments.read'))
     _DashboardItem(
       icon: Icons.calendar_month,
       title: 'Appointment',
       color: Colors.blue,
       onTap: () => _openScreen(context, const AppointmentsScreen()),
     ),
+    if (StaffAccess.seesOwnAppointments(session) && !show('appointments.read'))
+    _DashboardItem(
+      icon: Icons.calendar_month,
+      title: 'My appointments',
+      color: Colors.blue,
+      onTap: () => _openScreen(context, const AppointmentsScreen()),
+    ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.design_services,
       title: 'Appointment Service',
       color: Colors.indigo,
       onTap: () => _showComingSoon(context, 'Appointment Service'),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.history,
       title: 'Appointment Status History',
       color: Colors.blueGrey,
       onTap: () => _showComingSoon(context, 'Appointment Status History'),
     ),
+    if (show('branches.read'))
     _DashboardItem(
       icon: Icons.store,
       title: 'Branch',
       color: Colors.brown,
       onTap: () => _openScreen(context, const BranchesScreen()),
     ),
+    if (show('customers.read'))
     _DashboardItem(
       icon: Icons.people,
       title: 'Customer',
       color: Colors.orange,
       onTap: () => _openScreen(context, const CustomersScreen()),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.sticky_note_2,
       title: 'Customer Note',
       color: Colors.deepOrange,
       onTap: () => _showComingSoon(context, 'Customer Note'),
     ),
+    if (show('employees.read'))
     _DashboardItem(
       icon: Icons.badge,
       title: 'Employee',
       color: Colors.deepPurple,
       onTap: () => _openScreen(context, const EmployeesScreen()),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.receipt_long,
       title: 'Invoice',
       color: Colors.green,
       onTap: () => _showComingSoon(context, 'Invoice'),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.payments,
       title: 'Payment',
       color: Colors.lightGreen,
       onTap: () => _showComingSoon(context, 'Payment'),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.inventory_2,
       title: 'Inventory',
       color: Colors.red,
       onTap: () => _showComingSoon(context, 'Inventory'),
     ),
+    if (show('services.read'))
     _DashboardItem(
       icon: Icons.content_cut,
       title: 'Service',
       color: Colors.purple,
       onTap: () => _openScreen(context, const ServicesScreen()),
     ),
+    if (show('serviceCategories.read'))
     _DashboardItem(
       icon: Icons.category,
       title: 'Service Category',
       color: Colors.purpleAccent,
       onTap: () => _openScreen(context, const ServiceCategoriesScreen()),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.groups,
       title: 'Staff',
       color: Colors.indigo,
       onTap: () => _showComingSoon(context, 'Staff'),
     ),
+    if (show('appointments.read') || show('schedules.read'))
     _DashboardItem(
       icon: Icons.schedule,
       title: 'Staff Schedule',
       color: Colors.cyan,
       onTap: () => _openScreen(context, const SchedulingBoardScreen()),
     ),
+    if (show('leaves.read'))
     _DashboardItem(
       icon: Icons.event_busy,
       title: 'Staff Leave',
       color: Colors.amber,
       onTap: () => _showComingSoon(context, 'Staff Leave'),
     ),
+    if (!session.isSignedIn)
     _DashboardItem(
       icon: Icons.bar_chart,
       title: 'Report',

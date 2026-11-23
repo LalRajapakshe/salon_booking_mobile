@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/api/api_exception.dart';
 import '../../../core/auth/auth_session.dart';
+import '../../../core/auth/staff_access.dart';
 import '../data/appointment_repository.dart';
 import '../screens/cancellation_queue_screen.dart';
 
@@ -14,11 +15,13 @@ class CancellationQueueButton extends StatefulWidget {
     this.repository,
     this.onResolved,
     this.refreshSignal,
+    this.branchId,
   });
 
   final AppointmentRepository? repository;
   final Future<void> Function()? onResolved;
   final Listenable? refreshSignal;
+  final int? branchId;
 
   @override
   State<CancellationQueueButton> createState() => _CancellationQueueButtonState();
@@ -29,8 +32,7 @@ class _CancellationQueueButtonState extends State<CancellationQueueButton> with 
   Timer? _timer;
   int _count = 0;
 
-  bool get _visible =>
-      AuthSession.instance.can('appointments.read') || AuthSession.instance.can('appointments.manage');
+  bool get _visible => StaffAccess.seesNotificationQueue(AuthSession.instance);
 
   @override
   void initState() {
@@ -62,7 +64,7 @@ class _CancellationQueueButtonState extends State<CancellationQueueButton> with 
   Future<void> _refresh() async {
     if (!_visible || !AuthSession.instance.isSignedIn) return;
     try {
-      final items = await _repository.listCancellationRequests();
+      final items = await _repository.listCancellationRequests(branchId: widget.branchId);
       if (!mounted) return;
       setState(() => _count = items.where((item) => item.isPending).length);
     } on ApiException {
@@ -73,7 +75,10 @@ class _CancellationQueueButtonState extends State<CancellationQueueButton> with 
   Future<void> _open() async {
     final resolved = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (_) => CancellationQueueScreen(repository: _repository),
+        builder: (_) => CancellationQueueScreen(
+          repository: _repository,
+          branchId: widget.branchId,
+        ),
       ),
     );
     await _refresh();

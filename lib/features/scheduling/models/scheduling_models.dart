@@ -39,6 +39,7 @@ class SchedulingServiceSegment {
   final int? serviceId;
   final int? employeeId;
   final String? rowVersion;
+  final String lineStatus;
   final bool durationMismatch;
 
   const SchedulingServiceSegment({
@@ -54,6 +55,7 @@ class SchedulingServiceSegment {
     this.serviceId,
     this.employeeId,
     this.rowVersion,
+    this.lineStatus = 'Pending',
     this.durationMismatch = false,
   });
 }
@@ -64,6 +66,7 @@ class UnscheduledVisit {
   final String status;
   final String servicesLabel;
   final bool cancellationRequested;
+  final bool awaitingConfirmation;
 
   const UnscheduledVisit({
     required this.reference,
@@ -71,6 +74,7 @@ class UnscheduledVisit {
     required this.status,
     required this.servicesLabel,
     this.cancellationRequested = false,
+    this.awaitingConfirmation = false,
   });
 }
 
@@ -81,6 +85,7 @@ class SchedulingAppointment {
   final String status;
   final List<SchedulingServiceSegment> services;
   final bool cancellationRequested;
+  final bool awaitingConfirmation;
 
   const SchedulingAppointment({
     required this.reference,
@@ -89,6 +94,7 @@ class SchedulingAppointment {
     required this.status,
     required this.services,
     this.cancellationRequested = false,
+    this.awaitingConfirmation = false,
   });
 
   int get startMinute =>
@@ -114,6 +120,7 @@ class SchedulingAppointment {
           subtitle: segment.serviceName,
           status: status,
           cancellationRequested: cancellationRequested,
+          awaitingConfirmation: awaitingConfirmation,
           conflict: segment.conflict,
           notice: segment.durationMismatch
               ? 'Duration ${segment.durationMinutes} min does not match this time.'
@@ -135,6 +142,7 @@ class SchedulingBlock {
   final String subtitle;
   final String? status;
   final bool cancellationRequested;
+  final bool awaitingConfirmation;
   final bool conflict;
   final String? notice;
 
@@ -150,6 +158,7 @@ class SchedulingBlock {
     required this.subtitle,
     this.status,
     this.cancellationRequested = false,
+    this.awaitingConfirmation = false,
     this.conflict = false,
     this.notice,
   });

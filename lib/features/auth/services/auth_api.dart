@@ -31,8 +31,12 @@ class AuthApi {
     final profile = body['profile'];
     final permissions = <String>{};
     String? fullName;
+    int? branchId;
+    int? employeeId;
     if (profile is Map) {
       fullName = profile['fullName'] as String?;
+      branchId = (profile['branchId'] as num?)?.toInt();
+      employeeId = (profile['employeeId'] as num?)?.toInt();
       final granted = profile['permissions'];
       if (granted is List) {
         permissions.addAll(granted.whereType<String>());
@@ -44,6 +48,8 @@ class AuthApi {
       username: body['username'] as String? ?? username,
       fullName: fullName,
       expiresAt: DateTime.tryParse(body['expiresAt'] as String? ?? '') ?? DateTime.now(),
+      branchId: branchId != null && branchId > 0 ? branchId : null,
+      employeeId: employeeId != null && employeeId > 0 ? employeeId : null,
       permissions: permissions,
     );
   }

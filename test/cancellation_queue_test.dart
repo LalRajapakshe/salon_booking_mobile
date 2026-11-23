@@ -60,7 +60,13 @@ void main() {
       accessToken: 'token',
       username: 'manager',
       expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      permissions: {'appointments.read', 'appointments.manage'},
+      permissions: {
+        'appointments.read',
+        'appointments.manage',
+        'notifications.bookings.read',
+        'notifications.cancellations.read',
+        'notifications.confirmation.read',
+      },
     );
     final repository = _QueueRepository();
     await tester.pumpWidget(
@@ -79,7 +85,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Ada Lovelace'), findsOneWidget);
     expect(find.text('Cancellation Request'), findsOneWidget);
-    expect(find.text('0 new bookings · 1 cancellation request'), findsOneWidget);
+    expect(
+      find.text('0 new bookings · 0 awaiting confirmation · 1 cancellation request'),
+      findsOneWidget,
+    );
 
     await tester.tap(find.text('Ada Lovelace'));
     await tester.pumpAndSettle();
@@ -101,7 +110,13 @@ void main() {
       accessToken: 'token',
       username: 'manager',
       expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      permissions: {'appointments.read', 'appointments.manage'},
+      permissions: {
+        'appointments.read',
+        'appointments.manage',
+        'notifications.bookings.read',
+        'notifications.cancellations.read',
+        'notifications.confirmation.read',
+      },
     );
     final repository = _AllocationRepository();
     await tester.pumpWidget(MaterialApp(home: AllocationScreen(repository: repository, appointmentId: 41)));
@@ -132,7 +147,7 @@ void main() {
       accessToken: 'token',
       username: 'reader',
       expiresAt: DateTime.now().add(const Duration(hours: 1)),
-      permissions: {'appointments.read'},
+      permissions: {'appointments.read', 'notifications.cancellations.read'},
     );
     await tester.pumpWidget(
       MaterialApp(
@@ -237,7 +252,7 @@ class _QueueRepository extends AppointmentRepository {
   bool pending = true;
 
   @override
-  Future<List<CancellationNotice>> listCancellationRequests() async {
+  Future<List<CancellationNotice>> listCancellationRequests({int? branchId}) async {
     if (!pending) return const [];
     return [
       CancellationNotice(

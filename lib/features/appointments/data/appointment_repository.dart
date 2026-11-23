@@ -6,6 +6,7 @@ import '../models/appointment.dart';
 import '../models/allocation_recommendation.dart';
 import '../models/cancellation_notice.dart';
 import '../models/appointment_service_line.dart';
+import '../models/service_line_progress_entry.dart';
 import '../models/appointment_status.dart';
 import '../services/appointment_catalog.dart';
 
@@ -19,12 +20,31 @@ class AppointmentRepository {
 
   bool get isApiBacked => _session.isSignedIn;
 
+  /// A stylist reads assigned lines only. The appointment book stays closed.
+  bool get readsOwnBookOnly =>
+      _session.isSignedIn &&
+      _session.can('appointments.own.read') &&
+      !_session.can('appointments.read');
+
   /// Signed-in sessions read `GET /api/Appointments`.
   /// The list screen keeps the local catalog until a token exists so the
   /// current screens stay usable without a server.
   Future<List<Appointment>> list({DateTime? date, int? branchId}) async {
     if (!_session.isSignedIn) {
       return AppointmentCatalog.appointments;
+    }
+
+    if (readsOwnBookOnly) {
+      final body = await _client.getJsonList('/api/Appointments/mine');
+      final appointments = [
+        for (final item in body)
+          if (item is Map) AppointmentApiMapper.appointment(Map<String, dynamic>.from(item)),
+      ];
+      if (date == null) return appointments;
+      return [
+        for (final appointment in appointments)
+          if (_sameDay(appointment.appointmentDate, date)) appointment,
+      ];
     }
 
     final dateQuery = date == null ? '' : '&date=${_dateOnly(date)}';
@@ -156,6 +176,39 @@ class AppointmentRepository {
     return scheduled;
   }
 
+  /// `POST /api/Appointments/{id}/services/{lineId}/progress`.
+  /// The server decides whether this account may move the line.
+  Future<AppointmentServiceLine> progressLine({
+    required int appointmentId,
+    required int appointmentServiceId,
+    required String action,
+    String? rowVersion,
+  }) async {
+    final body = <String, dynamic>{'action': action};
+    final version = rowVersion?.trim();
+    if (version != null && version.isNotEmpty) body['rowVersion'] = version;
+    return AppointmentApiMapper.serviceLine(
+      await _client.postJson(
+        '/api/Appointments/$appointmentId/services/$appointmentServiceId/progress',
+        body,
+      ),
+    );
+  }
+
+  /// `GET /api/Appointments/{id}/services/{lineId}/progress`.
+  Future<List<ServiceLineProgressEntry>> lineProgressHistory({
+    required int appointmentId,
+    required int appointmentServiceId,
+  }) async {
+    final body = await _client.getJsonList(
+      '/api/Appointments/$appointmentId/services/$appointmentServiceId/progress',
+    );
+    return [
+      for (final item in body)
+        if (item is Map) ServiceLineProgressEntry.fromJson(Map<String, dynamic>.from(item)),
+    ];
+  }
+
   /// `POST /api/Appointments/{id}/status`. This stores the status only.
   /// There is no arrival-time column on the appointment.
   Future<Appointment> changeStatus({
@@ -189,9 +242,10 @@ class AppointmentRepository {
   }
 
   /// Pending customer cancellation requests for this user's tenant and branch.
-  Future<List<CancellationNotice>> listCancellationRequests() async {
+  Future<List<CancellationNotice>> listCancellationRequests({int? branchId}) async {
     if (!_session.isSignedIn) return const [];
-    final body = await _client.getJsonList('/api/Appointments/notifications');
+    final branchQuery = branchId != null && branchId > 0 ? '?branchId=$branchId' : '';
+    final body = await _client.getJsonList('/api/Appointments/notifications$branchQuery');
     return [
       for (final item in body)
         if (item is Map) CancellationNotice.fromJson(Map<String, dynamic>.from(item)),
@@ -245,5 +299,9 @@ class AppointmentRepository {
     final month = value.month.toString().padLeft(2, '0');
     final day = value.day.toString().padLeft(2, '0');
     return '$year-$month-$day';
+  }
+
+  static bool _sameDay(DateTime left, DateTime right) {
+    return left.year == right.year && left.month == right.month && left.day == right.day;
   }
 }

@@ -16,6 +16,8 @@ class ReceptionVisit {
   final String? priceLabel;
   final String? notes;
   final bool cancellationRequested;
+  final bool awaitingConfirmation;
+  final bool allocated;
 
   const ReceptionVisit({
     required this.appointmentId,
@@ -30,10 +32,13 @@ class ReceptionVisit {
     this.priceLabel,
     this.notes,
     this.cancellationRequested = false,
+    this.awaitingConfirmation = false,
+    this.allocated = true,
   });
 
   bool get canConfirm =>
-      status == AppointmentStatus.pending || status == AppointmentStatus.scheduled;
+      allocated &&
+      (status == AppointmentStatus.pending || status == AppointmentStatus.scheduled);
 
   bool get canCheckIn =>
       status == AppointmentStatus.pending ||
