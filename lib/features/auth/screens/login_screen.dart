@@ -93,8 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
 
   void _forgotPassword() {
-    // TODO:
-    // Navigate to Forgot Password Screen
+    AppSnackBar.info(context, 'Ask a salon administrator to reset this password.');
   }
 
   @override

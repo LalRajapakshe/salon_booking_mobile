@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:salon_booking_mobile/core/auth/auth_session.dart';
 import 'package:salon_booking_mobile/features/dashboard/screens/dashboard_screen.dart';
 import 'package:salon_booking_mobile/features/dashboard/widgets/dashboard_card.dart';
 import 'package:salon_booking_mobile/features/dashboard/widgets/quick_action_card.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(AuthSession.instance.clear);
+  tearDown(AuthSession.instance.clear);
 
   const quickActionTitles = [
     'Front Desk',

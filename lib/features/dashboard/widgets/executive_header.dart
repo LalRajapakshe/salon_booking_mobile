@@ -5,6 +5,7 @@ class ExecutiveHeader extends StatelessWidget {
   final String greeting;
   final String date;
   final double businessHealth;
+  final String statusLine;
 
   const ExecutiveHeader({
     super.key,
@@ -12,6 +13,7 @@ class ExecutiveHeader extends StatelessWidget {
     required this.greeting,
     required this.date,
     required this.businessHealth,
+    this.statusLine = 'Sign in to replace the preview with live figures.',
   });
 
   @override
@@ -77,9 +79,9 @@ class ExecutiveHeader extends StatelessWidget {
                     color: Colors.white.withOpacity(.18),
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  child: const Text(
-                    "Your business is performing well today.",
-                    style: TextStyle(
+                  child: Text(
+                    statusLine,
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w500,
                     ),
@@ -105,7 +107,7 @@ class ExecutiveHeader extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  "${businessHealth.toInt()}%",
+                  businessHealth < 0 ? "Live" : "${businessHealth.toInt()}%",
                   style: const TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.bold,

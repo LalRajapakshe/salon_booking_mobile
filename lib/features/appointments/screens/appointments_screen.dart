@@ -16,6 +16,7 @@ import '../models/appointment_status.dart';
 import '../models/appointment_time.dart';
 import '../services/appointment_catalog.dart';
 import '../widgets/appointment_status_badge.dart';
+import '../../billing/screens/bill_editor_screen.dart';
 import 'create_appointment_screen.dart';
 
 class AppointmentsScreen extends StatefulWidget {
@@ -688,6 +689,17 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                     switch (action) {
                       case 'view':
                         _view(appointment);
+                      case 'bill':
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => BillEditorScreen(
+                              customerId: appointment.customerId,
+                              customerName: appointment.customerName,
+                              appointmentId: appointment.appointmentId,
+                            ),
+                          ),
+                        );
                       case 'edit':
                         _openEdit(appointment);
                       case 'delete':
@@ -705,6 +717,12 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                       value: 'view',
                       child: Text('View'),
                     ),
+                    if (appointment.status == AppointmentStatus.completed &&
+                        StaffAccess.canManageBills(AuthSession.instance))
+                      const PopupMenuItem<String>(
+                        value: 'bill',
+                        child: Text('Bill'),
+                      ),
                     PopupMenuItem<String>(
                       value: 'edit',
                       enabled: appointment.canEdit,

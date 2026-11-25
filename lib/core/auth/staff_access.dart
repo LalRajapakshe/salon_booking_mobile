@@ -36,4 +36,28 @@ class StaffAccess {
   }
 
   static bool seesAppointmentBook(AuthSession session) => session.can('appointments.read');
+
+  static bool seesBills(AuthSession session) =>
+      session.can('bills.read') || session.can('bills.manage');
+
+  static bool canManageBills(AuthSession session) => session.can('bills.manage');
+
+  static bool canCollectPayments(AuthSession session) => session.can('payments.collect');
+
+  static bool seesProducts(AuthSession session) =>
+      session.can('products.read') || session.can('products.manage');
+
+  static bool canManageProducts(AuthSession session) => session.can('products.manage');
+
+  static bool seesTax(AuthSession session) =>
+      session.can('tax.read') || session.can('tax.manage');
+
+  static bool canManageTax(AuthSession session) => session.can('tax.manage');
+
+  static bool seesRentals(AuthSession session) =>
+      session.can('rentals.read') || session.can('rentals.manage') || session.can('rentals.issue');
+
+  static bool canManageRentals(AuthSession session) => session.can('rentals.manage');
+
+  static bool canIssueRentals(AuthSession session) => session.can('rentals.issue');
 }

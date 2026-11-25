@@ -11,7 +11,6 @@ import '../widgets/dashboard_card.dart';
 import '../widgets/employee_card.dart';
 import '../widgets/executive_header.dart';
 import '../widgets/inventory_alert_card.dart';
-import '../widgets/kpi_card.dart';
 import '../widgets/quick_action_card.dart';
 import '../widgets/schedule_card.dart';
 import '../widgets/section_title.dart';
@@ -21,6 +20,12 @@ import '../widgets/section_title.dart';
 //import '../../revenue/widgets/payment_breakdown_card.dart';
 
 import '../../appointments/screens/appointments_screen.dart';
+import '../../billing/screens/bills_screen.dart';
+import '../../billing/screens/products_screen.dart';
+import '../../billing/screens/tax_screen.dart';
+import '../../operations/widgets/live_operations_panel.dart';
+import '../../rentals/screens/rentals_screen.dart';
+import '../../stylist/screens/stylist_board_screen.dart';
 import '../../appointments/widgets/cancellation_queue_button.dart';
 import '../../customers/screens/customers_screen.dart';
 import '../../branches/screens/branches_screen.dart';
@@ -66,8 +71,11 @@ class DashboardScreen extends StatelessWidget {
             ExecutiveHeader(
               greeting: "Good Morning 👋",
               userName: AuthSession.instance.fullName ?? AuthSession.instance.username ?? "Administrator",
-              date: "Monday, 20 July 2026",
-              businessHealth: 94,
+              date: DateTime.now().toString().split(' ').first,
+              businessHealth: -1,
+              statusLine: AuthSession.instance.isSignedIn
+                  ? "Today's figures below are from the salon."
+                  : 'Sign in to replace the preview with live figures.',
             ),
 
             const SizedBox(height: 30),
@@ -80,108 +88,8 @@ class DashboardScreen extends StatelessWidget {
 
             const SizedBox(height: 20),
 
-            LayoutBuilder(
-              builder: (context, constraints) {
-                int crossAxisCount = 2;
-
-                if (constraints.maxWidth > 1200) {
-                  crossAxisCount = 4;
-                } else if (constraints.maxWidth > 700) {
-                  crossAxisCount = 3;
-                }
-
-                return GridView.count(
-                  crossAxisCount: crossAxisCount,
-
-                  shrinkWrap: true,
-
-                  physics: const NeverScrollableScrollPhysics(),
-
-                  crossAxisSpacing: 16,
-
-                  mainAxisSpacing: 16,
-
-                  //childAspectRatio: 1.35,
-                  childAspectRatio: constraints.maxWidth < 600
-                      ? 1.20
-                      : constraints.maxWidth < 900
-                      ? 1.28
-                      : 1.35,
-
-                  children: [
-                    KpiCard(
-                      title: "Revenue",
-                      value: "Rs.84,500",
-                      change: "+18%",
-                      icon: Icons.payments,
-                      color: Colors.green,
-                    ),
-
-                    KpiCard(
-                      title: "Appointments",
-                      value: "28",
-                      change: "+6%",
-                      icon: Icons.calendar_month,
-                      color: Colors.blue,
-                    ),
-
-                    KpiCard(
-                      title: "Customers",
-                      value: "324",
-                      change: "+9%",
-                      icon: Icons.people,
-                      color: Colors.orange,
-                    ),
-
-                    KpiCard(
-                      title: "Walk-ins",
-                      value: "14",
-                      change: "+3%",
-                      icon: Icons.directions_walk,
-                      color: Colors.purple,
-                    ),
-
-                    KpiCard(
-                      title: "New Customers",
-                      value: "06",
-                      change: "+2",
-                      icon: Icons.person_add,
-                      color: Colors.teal,
-                    ),
-
-                    KpiCard(
-                      title: "Outstanding",
-                      value: "Rs.21K",
-                      change: "-4%",
-                      icon: Icons.account_balance_wallet,
-                      color: Colors.red,
-                    ),
-                    //                   KpiCard(
-                    // title: "Outstanding",
-                    // value: "Rs.21K",
-                    // change: "-4%",
-                    // icon: Icons.account_balance_wallet,
-                    // color: Colors.red,
-                    //),
-                    KpiCard(
-                      title: "VIP Members",
-                      value: "18",
-                      change: "+1",
-                      icon: Icons.workspace_premium,
-                      color: Colors.amber,
-                    ),
-
-                    KpiCard(
-                      title: "Birthdays",
-                      value: "04",
-                      change: "Today",
-                      icon: Icons.cake,
-                      color: Colors.pink,
-                    ),
-                  ],
-                );
-              },
-            ),
+            const LiveOperationsPanel(),
+            if (!AuthSession.instance.isSignedIn) ...[
             ///////////////////////////////////////////////////
             const SizedBox(height: 30),
 
@@ -241,10 +149,12 @@ class DashboardScreen extends StatelessWidget {
                 ),
               ),
             ),
+            ],
 
             //////////////////////////////////////////////////
             const SizedBox(height: 30),
 
+            if (!AuthSession.instance.isSignedIn) ...[
             const SectionTitle(
               title: "AI Business Assistant",
               subtitle: "Business insights powered by AI",
@@ -254,10 +164,11 @@ class DashboardScreen extends StatelessWidget {
             const SizedBox(height: 16),
 
             const AiSummaryCard(),
+            ],
 
             const SizedBox(height: 30),
 
-            LayoutBuilder(
+            if (!AuthSession.instance.isSignedIn) LayoutBuilder(
               builder: (context, constraints) {
                 if (constraints.maxWidth > 1000) {
                   return Row(
@@ -418,7 +329,7 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
       icon: Icons.calendar_month,
       title: 'My appointments',
       color: Colors.blue,
-      onTap: () => _openScreen(context, const AppointmentsScreen()),
+      onTap: () => _openScreen(context, const StylistBoardScreen()),
     ),
     if (!session.isSignedIn)
     _DashboardItem(
@@ -461,6 +372,34 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
       title: 'Employee',
       color: Colors.deepPurple,
       onTap: () => _openScreen(context, const EmployeesScreen()),
+    ),
+    if (session.isSignedIn && StaffAccess.seesBills(session))
+    _DashboardItem(
+      icon: Icons.receipt_long,
+      title: 'Billing',
+      color: Colors.green,
+      onTap: () => _openScreen(context, const BillsScreen()),
+    ),
+    if (session.isSignedIn && StaffAccess.seesProducts(session))
+    _DashboardItem(
+      icon: Icons.shopping_bag_outlined,
+      title: 'Retail products',
+      color: Colors.teal,
+      onTap: () => _openScreen(context, const ProductsScreen()),
+    ),
+    if (session.isSignedIn && StaffAccess.seesRentals(session))
+    _DashboardItem(
+      icon: Icons.checkroom,
+      title: 'Rentals',
+      color: Colors.indigo,
+      onTap: () => _openScreen(context, const RentalsScreen()),
+    ),
+    if (session.isSignedIn && StaffAccess.seesTax(session))
+    _DashboardItem(
+      icon: Icons.percent,
+      title: 'Tax',
+      color: Colors.blueGrey,
+      onTap: () => _openScreen(context, const TaxScreen()),
     ),
     if (!session.isSignedIn)
     _DashboardItem(
@@ -530,20 +469,21 @@ List<_DashboardItem> _quickActionItems(BuildContext context) {
 
 List<_DashboardItem> _systemModuleItems(BuildContext context) {
   final session = AuthSession.instance;
+  bool show(String permission) => !session.isSignedIn || session.can(permission);
   return [
-    if (session.can('permissions.read'))
+    if (show('permissions.read'))
       _DashboardItem(
         icon: Icons.vpn_key,
         title: 'Permission',
         onTap: () => _openScreen(context, const PermissionsScreen()),
       ),
-    if (session.can('roles.read'))
+    if (show('roles.read'))
       _DashboardItem(
         icon: Icons.admin_panel_settings,
         title: 'Role',
         onTap: () => _openScreen(context, const RolesScreen()),
       ),
-    if (session.can('roles.manage'))
+    if (show('roles.manage'))
       _DashboardItem(
         icon: Icons.rule,
         title: 'Role Permission',
@@ -554,13 +494,13 @@ List<_DashboardItem> _systemModuleItems(BuildContext context) {
       title: 'Tenant',
       onTap: () => _showComingSoon(context, 'Tenant'),
     ),
-    if (session.can('users.read'))
+    if (show('users.read'))
       _DashboardItem(
         icon: Icons.group,
         title: 'Users',
         onTap: () => _openScreen(context, const UsersScreen()),
       ),
-    if (session.can('users.manage'))
+    if (show('users.manage'))
       _DashboardItem(
         icon: Icons.manage_accounts,
         title: 'User Roles',

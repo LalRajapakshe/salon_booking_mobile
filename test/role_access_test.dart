@@ -58,6 +58,14 @@ void main() {
     expect(StaffAccess.canManageAppointments(session), isFalse);
     expect(AppointmentRepository().readsOwnBookOnly, isTrue);
     expect(StaffAccess.canProgressLine(session, 9), isFalse);
+    expect(StaffAccess.seesBills(session), isFalse);
+    expect(StaffAccess.canManageBills(session), isFalse);
+    expect(StaffAccess.seesTax(session), isFalse);
+    expect(StaffAccess.canManageTax(session), isFalse);
+    expect(StaffAccess.seesProducts(session), isFalse);
+    expect(StaffAccess.seesRentals(session), isFalse);
+    expect(StaffAccess.canManageRentals(session), isFalse);
+    expect(StaffAccess.canIssueRentals(session), isFalse);
     expect(StaffAccess.canProgressLine(session, 10), isFalse);
     expect(StaffAccess.canReadLineHistory(session, 9), isTrue);
     expect(StaffAccess.canReadLineHistory(session, 10), isFalse);
@@ -73,6 +81,21 @@ void main() {
     expect(StaffAccess.seesUsers(session), isFalse);
     expect(StaffAccess.canProgressLine(session, 4), isTrue);
     expect(StaffAccess.canManageAppointments(session), isFalse);
+    expect(StaffAccess.seesRentals(session), isFalse);
+    expect(StaffAccess.canManageRentals(session), isFalse);
+    expect(StaffAccess.canIssueRentals(session), isFalse);
+  });
+
+  test('rental access is full for the desk and view-only for a supervisor', () {
+    _signIn({...receptionist, 'rentals.read', 'rentals.manage', 'rentals.issue'});
+    expect(StaffAccess.seesRentals(AuthSession.instance), isTrue);
+    expect(StaffAccess.canManageRentals(AuthSession.instance), isTrue);
+    expect(StaffAccess.canIssueRentals(AuthSession.instance), isTrue);
+
+    _signIn({...supervisor, 'rentals.read'});
+    expect(StaffAccess.seesRentals(AuthSession.instance), isTrue);
+    expect(StaffAccess.canManageRentals(AuthSession.instance), isFalse);
+    expect(StaffAccess.canIssueRentals(AuthSession.instance), isFalse);
   });
 
   test('receptionist and supervisor together keep the union without employee administration', () {
